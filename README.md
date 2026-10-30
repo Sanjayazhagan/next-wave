@@ -29,14 +29,23 @@ platform that sets `PORT`. It needs a persistent volume at `/data`, one instance
 only, and no scale-to-zero: SQLite and the live event stream live in that instance,
 and work continues after the webhook has been answered.
 
-### Northflank
+### Railway
 
-1. Create a combined service from this GitHub repo, using the `Dockerfile` as the build
-   type and exposing port 8000 publicly over HTTP.
-2. Add a volume to the service, mounted at `/data`.
-3. Paste your `.env` into the service's runtime variables.
-4. In Meta, under WhatsApp > Configuration, set the callback URL to the service's public
-   address plus `/whatsapp`, paste `WHATSAPP_VERIFY_TOKEN`, and subscribe to `messages`.
+Live at `https://api-production-be3b1.up.railway.app`. To redeploy from this folder:
+
+```bash
+railway up --service api
+```
+
+To set it up from scratch:
+
+1. Run `railway login`, `railway init --name next-wave` and
+   `railway add --service api`, then `railway service link api`.
+2. Run `railway volume add --mount-path /data`. From Git Bash, use PowerShell instead,
+   because Git Bash rewrites the path.
+3. Copy your `.env` into the service's variables, then run `railway domain`.
+4. In Meta, under WhatsApp > Configuration, set the callback URL to that address plus
+   `/whatsapp`, paste `WHATSAPP_VERIFY_TOKEN`, and subscribe to `messages`.
 
 Set `USE_STANDINS=false`, `BROWSER_WORKER_URL` and `LANGUAGE_SERVICE_URL` once those
 services are up. Back up `VAULT_KEY` somewhere safe: without it the vault cannot be read.

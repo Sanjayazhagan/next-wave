@@ -2,6 +2,10 @@
 # Runs the LLM proxy beside the API, on loopback so only this container reaches it.
 set -e
 
+# Not 8080: platforms such as Railway give the API that port through PORT.
+PROXY_PORT=8090
+export LLM_BASE_URL="http://127.0.0.1:${PROXY_PORT}/v1"
+
 # Platforms mount volumes as root, so hand this one to the API's user.
 chown -R 1001:1001 /data
 
@@ -11,7 +15,7 @@ chown -R 1001:1001 /data
         env -u WHATSAPP_ACCESS_TOKEN -u WHATSAPP_APP_SECRET -u WHATSAPP_VERIFY_TOKEN \
             -u VAULT_KEY -u API_TOKEN HOME=/home/pool \
             setpriv --reuid=1002 --regid=1002 --clear-groups \
-            freellmpool proxy --host 127.0.0.1 --port 8080 || true
+            freellmpool proxy --host 127.0.0.1 --port "$PROXY_PORT" || true
         sleep 5
     done
 ) &
