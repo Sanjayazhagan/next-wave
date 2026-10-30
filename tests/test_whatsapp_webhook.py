@@ -15,6 +15,13 @@ def test_health(client: TestClient) -> None:
     assert client.get("/health").json() == {"status": "ok"}
 
 
+def test_privacy_policy_is_public(client: TestClient) -> None:
+    response = client.get("/privacy")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Privacy Policy" in response.text
+
+
 def test_verify_returns_challenge(client: TestClient) -> None:
     response = client.get(
         "/whatsapp",

@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     whatsapp_verify_token: Required
     graph_api_version: str = "v23.0"
 
+    # Telegram stays off until both of these are set.
+    telegram_bot_token: str = ""
+    telegram_webhook_secret: str = ""
+    # This server's HTTPS address, so it can register its Telegram webhook.
+    public_url: str = ""
+
     vault_key: Required  # Base64 of 32 random bytes. Losing it loses the vault.
     api_token: Required  # Sent by the web app on every session API call.
 

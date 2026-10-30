@@ -1,8 +1,12 @@
 # GradientZero agent API
 
-Core of the Forge '26 project: the LangGraph agent, WhatsApp channel, encrypted
-vault, skill library and session API. See [contracts/README.md](contracts/README.md)
-for how the other modules plug in.
+Core of the Forge '26 project: the LangGraph agent, chat channels, encrypted vault,
+skill library and session API. See [contracts/README.md](contracts/README.md) for how
+the other modules plug in.
+
+The live chat channel is Telegram: [@Dakiya_seva_bot](https://t.me/Dakiya_seva_bot).
+The WhatsApp channel is built too, but Meta only delivers real messages to published
+apps, and publishing needs business verification.
 
 ## Run it locally
 
@@ -44,8 +48,12 @@ To set it up from scratch:
 2. Run `railway volume add --mount-path /data`. From Git Bash, use PowerShell instead,
    because Git Bash rewrites the path.
 3. Copy your `.env` into the service's variables, then run `railway domain`.
-4. In Meta, under WhatsApp > Configuration, set the callback URL to that address plus
-   `/whatsapp`, paste `WHATSAPP_VERIFY_TOKEN`, and subscribe to `messages`.
+4. Set `PUBLIC_URL` to that address. With `TELEGRAM_BOT_TOKEN` and
+   `TELEGRAM_WEBHOOK_SECRET` also set, the server registers its Telegram webhook when
+   it starts.
+5. For WhatsApp, in Meta under WhatsApp > Configuration, set the callback URL to that
+   address plus `/whatsapp`, paste `WHATSAPP_VERIFY_TOKEN`, and subscribe to `messages`.
+   The app must be published before real messages arrive.
 
 Set `USE_STANDINS=false`, `BROWSER_WORKER_URL` and `LANGUAGE_SERVICE_URL` once those
 services are up. Back up `VAULT_KEY` somewhere safe: without it the vault cannot be read.

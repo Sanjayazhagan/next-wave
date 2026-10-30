@@ -8,8 +8,9 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
 
+from app.conversation import ConversationContext
 from app.whatsapp.dedupe import SeenMessages
-from app.whatsapp.handler import WhatsAppContext, handle_message
+from app.whatsapp.handler import handle_message
 
 # Message text can hold OTPs and phone numbers, so log only ids and types.
 log = logging.getLogger(__name__)
@@ -32,7 +33,7 @@ def iter_messages(payload: dict[str, Any]) -> Iterator[dict[str, Any]]:
 
 
 async def process_payload(
-    payload: dict[str, Any], ctx: WhatsAppContext, seen: SeenMessages
+    payload: dict[str, Any], ctx: ConversationContext, seen: SeenMessages
 ) -> None:
     for message in iter_messages(payload):
         message_id = message["id"]

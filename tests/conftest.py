@@ -102,9 +102,35 @@ class Network:
         self.llm_calls = 0
         self.translated: list[dict[str, str]] = []
         self.heard_language = "ta"
+        self.telegram: list[tuple[str, dict[str, Any]]] = []
+        self.telegram_error: str | None = None
+
+    def _telegram(self, request: httpx.Request) -> httpx.Response:
+        if "/file/bot" in request.url.path:
+            return httpx.Response(200, content=b"telegram-file-bytes")
+        method = request.url.path.rsplit("/", 1)[-1]
+        is_json = request.headers.get("content-type", "").startswith("application/json")
+        self.telegram.append((method, json.loads(request.content) if is_json else {}))
+        if self.telegram_error:
+            return httpx.Response(
+                400, json={"ok": False, "description": self.telegram_error}
+            )
+        if method == "getFile":
+            result: Any = {"file_path": "photos/a.jpg", "file_size": 10}
+        else:
+            result = True
+        return httpx.Response(200, json={"ok": True, "result": result})
+
+    def telegram_calls(self, method: str) -> list[dict[str, Any]]:
+        return [body for name, body in self.telegram if name == method]
+
+    def telegram_texts(self) -> list[str]:
+        return [body["text"] for body in self.telegram_calls("sendMessage")]
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         url = str(request.url)
+        if "api.telegram.org" in url:
+            return self._telegram(request)
         if url.startswith(LLM_URL):
             self.llm_calls += 1
             reply = self.llm(json.loads(request.content))

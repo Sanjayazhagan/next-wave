@@ -4,6 +4,7 @@ from typing import Any
 
 import httpx
 
+from app.conversation import ENGLISH
 from app.language import LanguageError, LanguageService, to_voice_note
 from app.sessions import Session
 from app.vault import FileStore
@@ -13,7 +14,6 @@ log = logging.getLogger(__name__)
 
 MAX_BUTTON_BODY_LENGTH = 1000
 CHOOSE_TEXT = "Please choose:"
-ENGLISH = "en"
 
 
 class WhatsAppChannel:

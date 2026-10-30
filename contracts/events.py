@@ -1,4 +1,4 @@
-"""Agent events: core -> web app, WhatsApp notifier, benchmark."""
+"""Agent events: core -> web app, chat channels, benchmark."""
 from datetime import datetime
 from typing import Any, Literal
 

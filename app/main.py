@@ -12,7 +12,9 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from app.api import router as session_router
 from app.browser import BrowserWorker, HttpBrowserWorker
+from app.channels import ChannelError, RoutedChannel
 from app.config import Settings
+from app.conversation import ConversationContext
 from app.events import EventLog
 from app.graph.builder import build_graph
 from app.graph.nodes import Deps
@@ -20,15 +22,20 @@ from app.language import LanguageService
 from app.llm import ChatLlm
 from app.planner import Planner
 from app.plugins import Plugins, load_plugins
+from app.privacy import router as privacy_router
 from app.sessions import SessionManager, SessionStore
 from app.skills import SkillStore
 from app.standins import StubBrowser, StubExtractor
+from app.telegram.channel import TelegramChannel
+from app.telegram.client import TelegramClient
+from app.telegram.webhook import router as telegram_router
 from app.vault import FileStore, Vault, decode_master_key, derive_key
 from app.whatsapp.channel import WhatsAppChannel
 from app.whatsapp.client import WhatsAppClient
 from app.whatsapp.dedupe import SeenMessages
-from app.whatsapp.handler import WhatsAppContext
 from app.whatsapp.webhook import router as whatsapp_router
+
+log = logging.getLogger(__name__)
 
 
 def create_app(
@@ -52,7 +59,14 @@ def create_app(
         sessions = SessionStore(settings.database_path)
         language = LanguageService(settings, client)
         whatsapp = WhatsAppClient(settings, client)
-        channel = WhatsAppChannel(whatsapp, language, files)
+        whatsapp_channel = WhatsAppChannel(whatsapp, language, files)
+
+        telegram = None
+        telegram_channel = None
+        if settings.telegram_bot_token and settings.telegram_webhook_secret:
+            telegram = TelegramClient(settings, client)
+            telegram_channel = TelegramChannel(telegram, language, files)
+        channel = RoutedChannel(whatsapp_channel, telegram_channel)
 
         loaded = plugins or load_plugins()
         if settings.use_standins and loaded.extraction is None:
@@ -85,6 +99,11 @@ def create_app(
         )
         manager = SessionManager(build_graph(deps, checkpointer), sessions, events, channel)
 
+        def context(downloader) -> ConversationContext:
+            return ConversationContext(
+                settings, downloader, channel, language, files, sessions, manager
+            )
+
         app.state.settings = settings
         app.state.seen = seen
         app.state.files = files
@@ -92,9 +111,19 @@ def create_app(
         app.state.events = events
         app.state.sessions = sessions
         app.state.manager = manager
-        app.state.whatsapp_context = WhatsAppContext(
-            settings, whatsapp, channel, language, files, sessions, manager
-        )
+        app.state.whatsapp_context = context(whatsapp)
+        app.state.telegram_client = telegram
+        app.state.telegram_context = context(telegram) if telegram else None
+
+        if telegram and settings.public_url:
+            try:
+                await telegram.set_webhook(
+                    f"{settings.public_url.rstrip('/')}/telegram",
+                    settings.telegram_webhook_secret,
+                )
+                log.info("Telegram webhook registered")
+            except ChannelError as exc:
+                log.error("Could not register the Telegram webhook: %s", exc)
 
         recovery = asyncio.create_task(manager.recover())
         yield
@@ -105,6 +134,8 @@ def create_app(
         await client.aclose()
 
     logging.basicConfig(level=logging.INFO)
+    # httpx logs full URLs at INFO, and Telegram's URLs contain the bot token.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     app = FastAPI(title="GradientZero", lifespan=lifespan)
     if settings.cors_origins:
         app.add_middleware(
@@ -114,7 +145,9 @@ def create_app(
             allow_headers=["*"],
         )
     app.include_router(whatsapp_router)
+    app.include_router(telegram_router)
     app.include_router(session_router)
+    app.include_router(privacy_router)
 
     @app.get("/health")
     def health() -> dict[str, str]:

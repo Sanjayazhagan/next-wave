@@ -2,6 +2,7 @@ from typing import Any
 
 import httpx
 
+from app.channels import ChannelError
 from app.config import Settings
 
 MAX_TEXT_LENGTH = 4000
@@ -9,7 +10,7 @@ MAX_BUTTONS = 3
 MAX_BUTTON_TITLE_LENGTH = 20
 
 
-class WhatsAppError(Exception):
+class WhatsAppError(ChannelError):
     """Meta refused a request. The message holds Meta's error, never the token."""
 
 

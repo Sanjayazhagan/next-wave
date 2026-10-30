@@ -9,7 +9,7 @@ Each file holds Pydantic models; `Model.model_json_schema()` gives the JSON Sche
 | Extracted document schema | `documents.py` | Extraction → core |
 | Eligibility I/O | `eligibility.py` | Rule engine ↔ core |
 | Doctor I/O | `doctor.py` | Doctor ↔ core |
-| Agent events | `events.py` | Core → web app, WhatsApp notifier, benchmark |
+| Agent events | `events.py` | Core → web app, chat channels, benchmark |
 | Language API | `language.py` | Language service ↔ core |
 | Chaos inject | `browser.py` (`InjectRequest`) | Chaos script ↔ browser worker |
 | Vault calls | `vault.py` | Core ↔ vault |
