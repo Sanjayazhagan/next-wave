@@ -1,0 +1,24 @@
+groups:
+  - name: gradientzero-browser
+    rules:
+      - alert: BrowserServiceUnavailable
+        expr: up{job="gradientzero-browser"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Browser service cannot be scraped; check readiness, service authentication and Chromium.
+      - alert: SubmissionNeedsReconciliation
+        expr: gradientzero_sessions{state="submission_uncertain"} > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: A submission outcome is uncertain. Reconcile before retrying.
+      - alert: HumanStepNeedsReconciliation
+        expr: gradientzero_human_tasks{state="needs_reconciliation"} > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Inspect the observed browser state and reconcile the human task.

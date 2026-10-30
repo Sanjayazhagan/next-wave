@@ -1,0 +1,23 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Independent browser integration lab</title><style>body{font:16px system-ui;max-width:850px;margin:36px auto;padding:20px}label{display:block;margin-top:16px}input,select,textarea,button{font:inherit;padding:10px;margin:6px}iframe{width:95%;height:150px}aside{padding:12px;background:#fff0ce}[hidden]{display:none!important}</style></head><body>
+<aside>SYNTHETIC BROWSER INTEGRATION LAB — not a government website or AI model.</aside>
+<h1>Workshop permit request</h1><p>This unrelated fixture tests general observations and actions without scholarship selectors.</p>
+<nav><a href="/browser-lab/application">Begin request</a> <a href="/browser-lab/help" target="_blank">Open guidance</a></nav>
+<section id="application" hidden>
+<h2>Request details</h2><label id="name-label" for="applicant">Applicant full name</label><input id="applicant" name="applicant">
+<label for="route">Service route</label><select id="route"><option value="standard">Standard</option><option value="priority">Priority</option></select>
+<label><input type="checkbox" id="notify">Send status notifications</label>
+<label for="document">Prepared certificate</label><input id="document" type="file" accept="application/pdf">
+<label for="photo">Prepared photograph</label><input id="photo" type="file" accept="image/png,image/jpeg">
+<label for="bank">Bank account number</label><input id="bank" value="123456789012">
+<label for="secret">Login password</label><input id="secret" type="password" value="synthetic-secret">
+<button type="button" id="rename">Change field label</button><button type="button" id="preview">Preview request</button>
+<iframe title="Supporting reference" src="/browser-lab/frame"></iframe><div id="shadow-host"></div>
+</section>
+<section id="review" hidden><h2>Request preview</h2><table><tr><th>Field</th><th>Value</th></tr><tr><td>Request type</td><td>Workshop permit</td></tr></table><button type="button">Submit application</button></section>
+<script>
+if(location.pathname.endsWith('/application'))document.querySelector('#application').hidden=false;
+if(location.pathname.endsWith('/review'))document.querySelector('#review').hidden=false;
+document.querySelector('#rename').onclick=()=>document.querySelector('#name-label').textContent='Applicant legal name';
+document.querySelector('#preview').onclick=()=>location.href='/browser-lab/review';
+document.querySelector('#shadow-host').attachShadow({mode:'open'}).innerHTML='<label for="shadow-code">Supplement code</label><input id="shadow-code" name="supplement">';
+</script></body></html>

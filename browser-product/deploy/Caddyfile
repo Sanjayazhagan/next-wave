@@ -1,0 +1,25 @@
+{
+    email {$ACME_EMAIL}
+}
+
+{$DEMO_HOST} {
+    encode zstd gzip
+
+    # This gates every dashboard, API, SSE and screenshot path.
+    # Credentials are for a fictional-data DEMO; not citizen authentication.
+    basic_auth {
+        {$DEMO_USER} {$DEMO_PASSWORD_HASH}
+    }
+
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy no-referrer
+        -Server
+    }
+
+    reverse_proxy api:8000 {
+        # Preserve delivery of the agent event stream without waiting for buffers.
+        flush_interval -1
+    }
+}

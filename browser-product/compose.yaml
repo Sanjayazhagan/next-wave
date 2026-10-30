@@ -1,0 +1,50 @@
+# DEMO ONLY. Do not place this compose deployment on a public VM without auth and TLS.
+services:
+  api:
+    build: .
+    working_dir: /app
+    command: uvicorn server.app:app --host 0.0.0.0 --port 8000
+    ports:
+      - "127.0.0.1:8100:8000"
+    environment:
+      APP_MODE: demo
+      MOCK_BASE_URL: http://api:8000
+      WORKER_URL: http://worker:8101
+      DATABASE_PATH: /app/data/demo.db
+      INTERNAL_KEY: ${INTERNAL_KEY:-demo-worker-key-change-before-production}
+      APP_SIGNING_KEY: ${APP_SIGNING_KEY:-demo-signing-key-change-before-production}
+      SECURITY_MODE: ${SECURITY_MODE:-local-demo}
+      IDENTITY_SIGNING_KEY: ${IDENTITY_SIGNING_KEY:-}
+      DATA_ENCRYPTION_KEYS: ${DATA_ENCRYPTION_KEYS:-}
+      WHATSAPP_RETURN_URL: ${WHATSAPP_RETURN_URL:-}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-127.0.0.1,localhost,api}
+    volumes: ["demo-db:/app/data"]
+    depends_on:
+      worker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready',timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+  worker:
+    build: .
+    working_dir: /app
+    command: uvicorn browser.worker:app --host 0.0.0.0 --port 8101
+    environment:
+      APP_MODE: demo
+      MOCK_BASE_URL: http://api:8000
+      INTERNAL_KEY: ${INTERNAL_KEY:-demo-worker-key-change-before-production}
+      APP_SIGNING_KEY: ${APP_SIGNING_KEY:-demo-signing-key-change-before-production}
+      BROWSER_ALLOWED_ORIGINS: ${BROWSER_ALLOWED_ORIGINS:-http://api:8000}
+    shm_size: '1gb'
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8101/ready',timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    restart: unless-stopped
+volumes:
+  demo-db:

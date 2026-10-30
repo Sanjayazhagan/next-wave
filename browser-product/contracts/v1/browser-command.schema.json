@@ -1,0 +1,43 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "action_id": {
+      "maxLength": 100,
+      "minLength": 8,
+      "title": "Action Id",
+      "type": "string"
+    },
+    "expected_state": {
+      "title": "Expected State",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "otp",
+        "human",
+        "fill",
+        "approve",
+        "edit",
+        "resume",
+        "reconcile",
+        "poll",
+        "inject",
+        "action"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    }
+  },
+  "required": [
+    "action_id",
+    "expected_state",
+    "kind"
+  ],
+  "title": "BrowserCommand",
+  "type": "object"
+}

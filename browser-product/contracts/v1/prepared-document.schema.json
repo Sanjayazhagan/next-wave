@@ -1,0 +1,36 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "subject": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Subject",
+      "type": "string"
+    },
+    "source_ref": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Source Ref",
+      "type": "string"
+    },
+    "file_name": {
+      "pattern": "^[A-Za-z0-9_.-]{1,100}\\.pdf$",
+      "title": "File Name",
+      "type": "string"
+    },
+    "file_base64": {
+      "maxLength": 1400000,
+      "minLength": 8,
+      "title": "File Base64",
+      "type": "string"
+    }
+  },
+  "required": [
+    "subject",
+    "source_ref",
+    "file_name",
+    "file_base64"
+  ],
+  "title": "PreparedDocument",
+  "type": "object"
+}

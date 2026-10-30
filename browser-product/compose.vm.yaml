@@ -1,0 +1,32 @@
+# VM overlay for an HTTPS + password-protected SYNTHETIC demo.
+# Use WITH compose.yaml; never use this to submit real citizen applications.
+services:
+  api:
+    environment:
+      ALLOWED_HOSTS: ${DEMO_HOST},127.0.0.1,localhost,api
+      INTERNAL_KEY: ${INTERNAL_KEY:?set a random INTERNAL_KEY in .env}
+      APP_SIGNING_KEY: ${APP_SIGNING_KEY:?set a random APP_SIGNING_KEY in .env}
+  worker:
+    environment:
+      INTERNAL_KEY: ${INTERNAL_KEY:?set a random INTERNAL_KEY in .env}
+      APP_SIGNING_KEY: ${APP_SIGNING_KEY:?set a random APP_SIGNING_KEY in .env}
+  proxy:
+    image: caddy:2.10
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DEMO_HOST: ${DEMO_HOST:?set domain name pointing to the Mumbai VM}
+      ACME_EMAIL: ${ACME_EMAIL:?set TLS certificate contact email}
+      DEMO_USER: ${DEMO_USER:?set a demo username}
+      DEMO_PASSWORD_HASH: ${DEMO_PASSWORD_HASH:?set a bcrypt password hash}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+volumes:
+  caddy-data:
+  caddy-config:

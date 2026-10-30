@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Application doctor output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "risk_score",
+    "mismatches",
+    "allowed_to_continue"
+  ],
+  "properties": {
+    "risk_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "mismatches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "allowed_to_continue": {
+      "type": "boolean"
+    }
+  }
+}

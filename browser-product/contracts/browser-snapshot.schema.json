@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Worker screenshot and accessibility snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "stage",
+    "url",
+    "accessibility",
+    "screenshot_base64"
+  ],
+  "properties": {
+    "stage": {
+      "type": "string"
+    },
+    "url": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "accessibility": {
+      "type": "string"
+    },
+    "screenshot_base64": {
+      "type": "string"
+    },
+    "captcha_needed": {
+      "type": "boolean"
+    },
+    "otp_needed": {
+      "type": "boolean"
+    },
+    "error_detected": {
+      "type": "boolean"
+    },
+    "repairs": {
+      "type": "integer"
+    }
+  }
+}

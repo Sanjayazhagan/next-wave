@@ -1,0 +1,16 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "answer": {
+      "maxLength": 30,
+      "minLength": 1,
+      "title": "Answer",
+      "type": "string"
+    }
+  },
+  "required": [
+    "answer"
+  ],
+  "title": "Reply",
+  "type": "object"
+}
