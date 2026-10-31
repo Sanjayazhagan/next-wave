@@ -33,7 +33,8 @@ the student. Others explain schemes. We apply for them.
   modules handle document extraction (vision model checked against OCR, ID numbers
   masked before any model sees them), eligibility (plain-Python rules that load only
   after human review and only if each clause is verbatim in the official source),
-  the application doctor (transparent points checklist) and file compression to
+  the application doctor (transparent points checklist, including a tampering check that compares a TN
+  e-District certificate's QR code with its printed number and name) and file compression to
   portal limits. A Playwright worker drives the portal through accessibility roles
   and names; a chaos script tests self-repair. Every step is streamed to a web app
   and recorded in an audit trail.

@@ -37,7 +37,8 @@ Visual: docs/architecture.mmd rendered.
 ## 5. Results and roadmap
 **Measured, not claimed**
 - [[NUMBER: chart from results/chart.png: success rate and time to review, ours vs browser-use]]
-- Extraction accuracy [[NUMBER]] on real certificates; [[NUMBER]] self-repairs under chaos
+- Extraction accuracy 94.7% on real certificates (18/19 fields) [[NUMBER: update]]; [[NUMBER]] self-repairs under chaos
+- Tampered certificate caught: QR code vs printed number
 - Next: more portals, DigiLocker documents, NGO operator mode, application status watcher
 
 Visual: results/chart.png.

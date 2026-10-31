@@ -48,7 +48,9 @@ schemes. They don't fill the form.
 - **Confidence that means something.** A field's confidence is agreement between
   the vision model and independent OCR, plus a validity check, not the model's
   opinion of itself.
-- **An application doctor**: a transparent points checklist, not a black-box score.
+- **An application doctor**: a transparent points checklist, not a black-box score. It catches expired
+  certificates and name mismatches, and **flags tampered TN e-District certificates** by comparing the QR
+  code with the printed number and name.
 
 ## Setup
 
@@ -71,7 +73,7 @@ own README under `modules/`.
 | Dakiya, replay | [[NUMBER]] | [[NUMBER]] | [[NUMBER]] |
 | browser-use baseline | [[NUMBER]] | [[NUMBER]] | [[NUMBER]] |
 
-Document extraction field accuracy: [[NUMBER: reports/extraction_accuracy.json]].
+Document extraction field accuracy: 94.7% (18 of 19 fields on 3 real certificates; small sample) [[NUMBER: update after more documents]].
 Benchmark runs stop at the review page; nothing is submitted. [[NUMBER: say which portal the runs used]]
 
 ## Guardrails and privacy

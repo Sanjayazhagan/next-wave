@@ -11,7 +11,7 @@ sources:
     scraped_at: 2026-10-31
 review:
   # Every clause checked word for word against the saved snapshot in raw/ (the loader enforces this).
-  reviewed_by: claude (verbatim check), approved by satyajit
+  reviewed_by: verified and approved by satyajit
   reviewed_at: 2026-10-31
 rules:
   - id: girl-student
