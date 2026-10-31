@@ -1,0 +1,105 @@
+--- a/app/browser.py
++++ b/app/browser.py
+@@ -35,16 +35,21 @@
+ 
+     async def close(self, session_id: str) -> None: ...
+ 
++    async def authorize_submit(self, session_id: str, approval_ref: str, review_observation_id: str) -> None: ...
++
++    async def view(self, session_id: str) -> dict: ...
++
+ 
+ class HttpBrowserWorker:
+     def __init__(self, settings: Settings, http: httpx.AsyncClient) -> None:
+         self._http = http
+         self._base = settings.browser_worker_url.rstrip("/")
++        self._headers = {"X-Internal-Key": settings.browser_worker_key} if settings.browser_worker_key else {}
+ 
+     async def _request(self, method: str, path: str, **kwargs) -> httpx.Response:
+         try:
+             response = await self._http.request(
+-                method, f"{self._base}{path}", timeout=TIMEOUT_SECONDS, **kwargs
++                method, f"{self._base}{path}", timeout=TIMEOUT_SECONDS, headers=self._headers, **kwargs
+             )
+         except httpx.HTTPError as exc:
+             raise BrowserError(f"Browser worker unreachable: {type(exc).__name__}") from exc
+@@ -78,3 +83,11 @@
+ 
+     async def close(self, session_id: str) -> None:
+         await self._request("DELETE", f"/session/{session_id}")
++
++    async def authorize_submit(self, session_id: str, approval_ref: str, review_observation_id: str) -> None:
++        await self._request("POST",f"/session/{session_id}/authorize-submit",json={
++            "approved":True,"approval_ref":approval_ref,"review_observation_id":review_observation_id})
++
++    async def view(self, session_id: str) -> dict:
++        response = await self._request("GET",f"/session/{session_id}/view")
++        return response.json()
+--- a/app/config.py
++++ b/app/config.py
+@@ -39,6 +39,7 @@
+     default_language: str = "en"
+     choose_language: bool = True  # Ask for a language before anything else.
+     browser_worker_url: str = ""
++    browser_worker_key: str = ""  # Same as browser-product INTERNAL_KEY (server-to-server only)
+ 
+     # Runs a fake portal and fake extraction, so the loop can be tried end to end.
+     use_standins: bool = False
+--- a/app/graph/nodes.py
++++ b/app/graph/nodes.py
+@@ -358,6 +358,19 @@
+ 
+     async def portal_login(self, state: AgentState) -> dict[str, Any]:
+         owner, portal_id = state["owner"], state["portal_id"]
++        # A portal may start on an informational page, not a login form.
++        # Let the existing LLM explore links before asking for a portal ID.
++        try:
++            pre_login = await self.d.browser.snapshot(state["browser_session"])
++            has_id_field = any(
++                n.role in ("textbox", "searchbox") and
++                re.search(r"user.?id|login.?id|registration.?id|application.?id|username|mobile number", n.name, re.I)
++                for n in pre_login.nodes
++            )
++            if not has_id_field:
++                return {"route": "again"}
++        except BrowserError:
++            pass
+         portal_user_id = self.d.vault.get_portal_id(owner, portal_id)
+         if portal_user_id is None:
+             portal_user_id = typed(ask("portal_id", messages.PORTAL_ID))
+@@ -686,10 +699,21 @@
+         button = self.d.planner.find_final_submit(snapshot)
+         if button is None:
+             return self._handover("Could not find the final submit button")
+-        result = await self.d.browser.act(
+-            browser_session,
+-            Action(type="click", target={"role": button.role, "name": button.name}),
+-        )
++        # Approval is obtained from the citizen in the prior review node.
++        # Bind that approval to this exact, current browser observation.
++        # If the page changes, the worker rejects the final click.
++        if not snapshot.observation_id:
++            return self._handover("Browser did not supply a review observation ID")
++        try:
++            await self.d.browser.authorize_submit(
++                browser_session, state["session_id"], snapshot.observation_id
++            )
++            result = await self.d.browser.act(
++                browser_session,
++                Action(type="click", target={"role": button.role, "name": button.name}),
++            )
++        except BrowserError:
++            return self._handover(messages.SUBMIT_UNCERTAIN)
+         if not result.ok:
+             return self._handover(messages.SUBMIT_UNCERTAIN)
+         snapshot = await self.d.browser.snapshot(browser_session)
+--- a/contracts/browser.py
++++ b/contracts/browser.py
+@@ -48,6 +48,7 @@
+     session_expired: bool = False  # True triggers a re-login.
+     error: str | None = None
+     receipt_number: str | None = None
++    observation_id: str | None = None  # Opaque browser observation used to bind review approval
+ 
+     def find(self, target: Target) -> PageNode | None:
+         for node in self.nodes:

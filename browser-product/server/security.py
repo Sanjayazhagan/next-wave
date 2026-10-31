@@ -69,7 +69,7 @@ def enforce(request):
     path = request.url.path
     if path.startswith(('/health', '/ready', '/mock/', '/browser-lab/','/assist/', '/assist-config', '/assist.js', '/assist.css', '/app.js', '/app.css','/browser-workbench')) or path == '/':
         return None
-    if path.startswith('/integration/'):
+    if path.startswith(('/integration/', '/core-browser/')):
         # Integration endpoints independently require the service key.
         return None
     claims = identity(request)

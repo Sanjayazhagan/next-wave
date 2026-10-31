@@ -1,3 +1,27 @@
+> **31 October 2026 bridge fixes:** file uploads now expose type/accept/nearby rules through the legacy LangGraph snapshot; operator-reviewed per-site intermediate POSTs can be enabled via `BROWSER_INTERMEDIATE_POST_ORIGINS`; a read-only navigation diagnostics tool is included. The stale main-branch patch was removed. See [bridge fix handoff](docs/BRIDGE_FIX_HANDOFF_OCT31.md).
+
+> **NEW — Dynamic public website mode:** The browser API can now accept a public HTTPS URL from the core agent at session creation and follow public HTTPS links without updating `.env` for each site. Requires explicit opt-in `BROWSER_NAVIGATION_MODE=public-web`, signed integrated mode, and a citizen-consent reference; restrictions and deployment cautions in [docs/DYNAMIC_PUBLIC_WEB.md](docs/DYNAMIC_PUBLIC_WEB.md). The existing `main` LangGraph URL opener still needs a small client update to send dynamic URLs; the older `portal_id` API remains unchanged. This is not a replacement for an LLM or proof of real-portal readiness.
+
+# GradientZero Browser Product — live agent integration branch
+
+**NEW (31 Oct 2026):** This browser service now integrates with the teammate's
+existing next-wave LangGraph. The core remains the LLM/agent; this service
+executes observed, approved browser actions. See
+[docs/MAIN_AGENT_INTEGRATION.md](docs/MAIN_AGENT_INTEGRATION.md) and
+[docs/WORKER_HANDOFF_TO_CODEX.md](docs/WORKER_HANDOFF_TO_CODEX.md).
+
+For main-agent integration guidance (not a stale patch), see
+[docs/BRIDGE_FIX_HANDOFF_OCT31.md](docs/BRIDGE_FIX_HANDOFF_OCT31.md).
+The teammate's `main` is **not included or replaced** here.
+
+**Integrated is not synonymous with production ready.** The operator must
+configure an approved origin/portal registry; real sites and the full chat →
+agent → browser → receipt workflow still need evidence from authorized tests.
+The bundled synthetic portal remains isolated for regression testing, not for
+claiming real government submission. No real government integration is claimed.
+
+---
+
 # GradientZero / CivicFlow — FORGE '26 Browser & Product Teammate
 
 **Track 1 · Problem 3 — Autonomous Public Service & Bureaucracy Execution Agent.**

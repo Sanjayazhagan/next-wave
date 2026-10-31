@@ -1,0 +1,27 @@
+# Integrated mode for a private, authenticated deployment. Works with compose.yaml locally;
+# optionally add compose.vm.yaml on a VM. Public-web navigation is opt-in.
+# This overlay fails if required security secrets are missing.
+services:
+  api:
+    environment:
+      APP_MODE: integrated
+      SECURITY_MODE: signed
+      INTERNAL_KEY: ${INTERNAL_KEY:?Set random INTERNAL_KEY}
+      APP_SIGNING_KEY: ${APP_SIGNING_KEY:?Set distinct signing key}
+      IDENTITY_SIGNING_KEY: ${IDENTITY_SIGNING_KEY:?Set distinct 32+ char signing key}
+      DATA_ENCRYPTION_KEYS: ${DATA_ENCRYPTION_KEYS:?Set encryption key}
+      BROWSER_NAVIGATION_MODE: ${BROWSER_NAVIGATION_MODE:-allowlist}
+      BROWSER_ALLOWED_ORIGINS: ${BROWSER_ALLOWED_ORIGINS:-}
+      BROWSER_PORTALS_JSON: ${BROWSER_PORTALS_JSON:-}
+  worker:
+    environment:
+      APP_MODE: integrated
+      INTERNAL_KEY: ${INTERNAL_KEY:?Set random INTERNAL_KEY}
+      APP_SIGNING_KEY: ${APP_SIGNING_KEY:?Set distinct signing key}
+      BROWSER_NAVIGATION_MODE: ${BROWSER_NAVIGATION_MODE:-allowlist}
+      BROWSER_ALLOWED_ORIGINS: ${BROWSER_ALLOWED_ORIGINS:-}
+      BROWSER_PORTALS_JSON: ${BROWSER_PORTALS_JSON:-}
+      BROWSER_ALLOW_FORM_POST: ${BROWSER_ALLOW_FORM_POST:-false}
+      BROWSER_INTERMEDIATE_POST_ORIGINS: ${BROWSER_INTERMEDIATE_POST_ORIGINS:-}
+      BROWSER_ENABLE_FINAL_SUBMIT: ${BROWSER_ENABLE_FINAL_SUBMIT:-false}
+      CHROMIUM_DISABLE_HTTP2: ${CHROMIUM_DISABLE_HTTP2:-false}

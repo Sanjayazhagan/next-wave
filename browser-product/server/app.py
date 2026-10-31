@@ -29,8 +29,16 @@ async def lifespan(app):
         with sqlite3.connect(f'file:{DB.resolve().as_posix()}?mode=ro',uri=True) as existing:
             if existing.execute('PRAGMA user_version').fetchone()[0]>2:
                 raise RuntimeError('Database schema is newer than this application; refusing downgrade')
-    if MODE != 'demo':
-        raise RuntimeError('Production mode requires genuine authentication, isolated vault and authorized portal adapters; this distribution is demo-only.')
+    if MODE not in ('demo','integrated'):
+        raise RuntimeError('APP_MODE must be demo or integrated')
+    if MODE == 'integrated':
+        if os.getenv('SECURITY_MODE') != 'signed':
+            raise RuntimeError('Integrated mode requires SECURITY_MODE=signed')
+        from browser.public_web import navigation_mode, NAV_MODE_PUBLIC
+        if navigation_mode() != NAV_MODE_PUBLIC and (not os.getenv('BROWSER_ALLOWED_ORIGINS') or not os.getenv('BROWSER_PORTALS_JSON')):
+            raise RuntimeError('Allowlist mode requires operator-reviewed origins and portal registry')
+        from server.storage import cipher
+        cipher()
     if os.getenv('SECURITY_MODE') == 'signed':
         identity_key = os.getenv('IDENTITY_SIGNING_KEY','')
         if len(identity_key) < 32 or identity_key in (KEY, SIGN_KEY):
@@ -91,6 +99,8 @@ from server.access import router as access_router
 app.include_router(access_router)
 from server.browser_v2 import router as browser_v2_router
 app.include_router(browser_v2_router)
+from server.core_gateway import router as core_gateway_router
+app.include_router(core_gateway_router)
 from server.browser_lab import router as browser_lab_router
 app.include_router(browser_lab_router)
 from server.conversation_bridge import router as conversation_router
@@ -103,6 +113,10 @@ async def human_task_guard(request, call_next):
         request.state.identity = enforce(request)
     except HTTPException as exc:
         return JSONResponse({'detail': exc.detail}, status_code=exc.status_code)
+    # The synthetic portal and synthetic receipt API must not be publicly
+    # mistaken for a live government application in integrated mode.
+    if MODE == 'integrated' and (request.url.path.startswith(('/mock','/api/sessions','/api/mock','/session','/browser-lab')) or request.url.path == '/'):
+        return JSONResponse({'detail':'Synthetic demo routes are disabled in integrated mode'},status_code=404)
     # Assistance owns the challenge while claimed; legacy demo callers cannot race it.
     length = request.headers.get('content-length', '')
     if length and (not length.isdigit() or int(length) > 2*1024*1024):

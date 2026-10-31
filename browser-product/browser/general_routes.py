@@ -4,9 +4,11 @@ import os
 import time
 from typing import Literal
 from fastapi import APIRouter,Header,HTTPException
+from playwright.async_api import TimeoutError as PWTimeout, Error as PWError
 from pydantic import Field
 from browser.protocol import BrowserAction,ContextStart,StrictModel
 from browser.general import GeneralContext,act,observe,origin
+from browser.public_web import navigation_mode, NAV_MODE_PUBLIC, assert_public_url
 
 router=APIRouter()
 contexts:dict[str,GeneralContext]={}
@@ -32,14 +34,18 @@ class ToolAction(BrowserAction):
 @router.post('/contexts',status_code=201)
 async def create(req:ContextStart,x_internal_key:str|None=Header(None)):
     w=worker();w.require_key(x_internal_key)
-    allowed={origin(u.strip()) for u in (os.getenv('BROWSER_ALLOWED_ORIGINS') or w.MOCK_URL).split(',') if u.strip()}
-    try:requested=origin(req.url)
-    except ValueError:raise HTTPException(422,'Invalid navigation origin')
-    if requested not in allowed:raise HTTPException(403,'Origin is not configured by the trusted operator')
+    dynamic = navigation_mode() == NAV_MODE_PUBLIC
+    allowed={origin(u.strip()) for u in (os.getenv('BROWSER_ALLOWED_ORIGINS') or w.MOCK_URL).split(',') if u.strip()} if not dynamic else set()
+    if dynamic:
+        await assert_public_url(req.url)
+    else:
+        try:requested=origin(req.url)
+        except ValueError:raise HTTPException(422,'Invalid navigation origin')
+        if requested not in allowed:raise HTTPException(403,'Origin is not configured by the trusted operator')
     async with w.creation_lock:
         if len(w.sessions)+len(contexts)>=int(os.getenv('MAX_BROWSER_SESSIONS','8')):raise HTTPException(429,'Browser capacity reached')
         context=await w.app.state.browser.new_context(viewport={'width':1180,'height':760},accept_downloads=False)
-        page=await context.new_page();session=GeneralContext(context=context,page=page,allowed=allowed)
+        page=await context.new_page();session=GeneralContext(context=context,page=page,allowed=allowed,public_web=dynamic)
         await context.route('**/*',session.route)
         # No dialogs may hang a model-driven execution loop. Report them in future observation.
         async def dialog(d):
@@ -51,6 +57,13 @@ async def create(req:ContextStart,x_internal_key:str|None=Header(None)):
         try:
             await page.goto(req.url,wait_until='domcontentloaded',timeout=15000)
             result=await observe(session)
+        except PWTimeout as exc:
+            await context.close()
+            raise HTTPException(504,'Browser navigation timed out. Run scripts/diagnose_browser_navigation.py in the worker to distinguish network, DNS, resource blocks and DOM readiness') from exc
+        except PWError as exc:
+            await context.close()
+            reason='environment_blocked_by_admin' if 'ERR_BLOCKED_BY_ADMINISTRATOR' in str(exc) else 'network_or_browser_failure'
+            raise HTTPException(502,f'Browser navigation failed: {reason}; check worker navigation diagnostics') from exc
         except Exception:
             await context.close();raise
         contexts[session.id]=session

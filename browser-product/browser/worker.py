@@ -9,6 +9,7 @@ from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 from playwright.async_api import async_playwright, TimeoutError as PWTimeout
 from browser.adapters import MOCK as adapter
+from browser.public_web import navigation_mode, NAV_MODE_PUBLIC
 
 MODE = os.getenv('APP_MODE', 'demo')
 MOCK_URL = os.getenv('MOCK_BASE_URL', 'http://127.0.0.1:8100').rstrip('/')
@@ -52,12 +53,18 @@ async def reap_idle():
 
 @asynccontextmanager
 async def lifespan(app):
-    if MODE != 'demo':
-        raise RuntimeError('Only APP_MODE=demo is implemented. Production authentication and portal approval missing.')
+    if MODE not in ('demo','integrated'):
+        raise RuntimeError('APP_MODE must be demo or integrated')
+    if MODE=='integrated' and navigation_mode() != NAV_MODE_PUBLIC and (not os.getenv('BROWSER_ALLOWED_ORIGINS') or not os.getenv('BROWSER_PORTALS_JSON')):
+        raise RuntimeError('Allowlist mode requires explicit origins and portal registry')
     if not INTERNAL_KEY or not SIGN_KEY:
         raise RuntimeError('Internal keys required')
     p = await async_playwright().start()
-    options = dict(headless=True, args=['--no-sandbox', '--disable-dev-shm-usage'])
+    browser_args = ['--no-sandbox', '--disable-dev-shm-usage']
+    # Optional workaround for websites whose parser-blocking scripts stall over HTTP/2.
+    if os.getenv('CHROMIUM_DISABLE_HTTP2', 'false').strip().lower() in ('1', 'true', 'yes', 'on'):
+        browser_args.append('--disable-http2')
+    options = dict(headless=True, args=browser_args)
     if CHROMIUM_PATH:
         options['executable_path'] = CHROMIUM_PATH
     browser = await p.chromium.launch(**options)
@@ -83,6 +90,8 @@ async def lifespan(app):
 app = FastAPI(title='GradientZero Internal Browser Worker', lifespan=lifespan, docs_url=None, redoc_url=None)
 from browser.general_routes import router as general_router
 app.include_router(general_router)
+from browser.core_compat import router as core_compat_router
+app.include_router(core_compat_router)
 
 def require_key(x_internal_key: str | None):
     if not x_internal_key or not hmac.compare_digest(x_internal_key, INTERNAL_KEY):

@@ -1,3 +1,26 @@
+# Highest-priority latest scope — 31 October 2026 (supersedes old deferral notes)
+
+**Do NOT build a second agent or treat the demo as the product.**
+Main `Sanjayazhagan/next-wave` runs the actual LangGraph, model, chat channels,
+consent/approval and vault. This feature branch owns the live browser execution
+and product. Read `docs/MAIN_AGENT_INTEGRATION.md`,
+`docs/AGENTIC_INTEGRATION_RELEASE.md`, and
+`docs/WORKER_HANDOFF_TO_CODEX.md` and `docs/BRIDGE_FIX_HANDOFF_OCT31.md` FIRST. Browser API:
+`/core-browser/session` → private Playwright `/core/session`. Old main patch was removed because the teammate's latest branch changed.
+Use minimal, reviewed changes against current main; do NOT replace nodes.py.
+
+**Deployment is now explicitly requested again.** Prior messages below saying
+"deployment deferred" are stale. Actual Mumbai VM deployment and real-site
+verification remain uncompleted and are P0. Never report them as done.
+
+`APP_MODE=integrated` activates operator-reviewed portal navigation; see
+`compose.integrated.yaml` and signed auth requirements. This is not a claim
+of production certification. OTP/CAPTCHA/security controls remain human-only,
+last submit requires fresh citizen approval, and real portal authorizations
+must be established. The main agent decides which actions to take.
+
+---
+
 # Codex agent instructions — GradientZero Browser & Product
 
 ## Latest user scope (31 October 2026 IST)
@@ -21,3 +44,11 @@ READ `docs/MASTER_HANDOFF.md` FIRST. It is the full team brief, source traceabil
 Do NOT claim real-portal automation is implemented. All currently implemented flows are fictional mock demo only. The environment that generated this archive has Chromium enterprise URLBlocklist and couldn't verify full HTTP navigation; run integration tests on your own host/container first.
 
 Order: `README.md` → `docs/MASTER_HANDOFF.md` → `docs/ARCHITECTURE_AND_INTERFACES.md` → preflight / unit / smoke → implement missing requirements → rerun tests → document facts. Maintain honest distinction between real work and simulated workflow.
+
+
+## Dynamic public URL navigation (31 Oct 2026)
+- Read `docs/DYNAMIC_PUBLIC_WEB.md` before editing security or browser routing.
+- `BROWSER_NAVIGATION_MODE=public-web` accepts consent-backed HTTPS URLs at runtime in both `/core-browser/session` and `/integration/v2/browser/contexts`; no manual registry entry is needed per website.
+- Do not allow access to private networks, localhost, cloud metadata, embedded credentials or arbitrary ports. DNS and URL validation MUST remain enabled. These checks do not replace network egress isolation for untrusted browsing.
+- Keep the existing `main` LangGraph implementation intact. Its current `open(portal_id)` can continue on registered portals; its owner can optionally adapt it to send `url` and `consent_ref`.
+- Never bypass OTP/CAPTCHA or irreversible-submit gates; do not claim complete real portal support.
