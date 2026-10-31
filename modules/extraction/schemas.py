@@ -31,7 +31,7 @@ HELPER_FIELDS = {"marks_total", "marks_max", "caste"}
 def schema_for(doc_type: str) -> type[BaseModel]:
     fields = FIELDS_BY_TYPE[doc_type]
     return create_model(f"{doc_type.title().replace('_', '')}Fields",
-                        **{f: (Read, Read()) for f in fields})
+                        **{f: (Read | None, None) for f in fields})
 
 
 class DocTypeAnswer(BaseModel):

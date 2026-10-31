@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 
 from app.config import Settings
+from common.pace import book, estimate_tokens
 
 log = logging.getLogger(__name__)
 
@@ -14,6 +15,7 @@ MAX_ATTEMPTS = 3
 TIMEOUT_SECONDS = 60
 DEFAULT_RATE_LIMIT_WAIT = 2.0
 MAX_RATE_LIMIT_WAIT = 20.0
+MAX_REPLY_TOKENS = 600
 
 
 class LlmError(Exception):
@@ -68,22 +70,25 @@ class ChatLlm:
                 return parse_json_object(await self._complete(system, user, timeout))
             except (LlmError, httpx.HTTPError) as exc:
                 last_error = exc
-                log.warning("LLM attempt failed: %s", type(exc).__name__)
+                status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else ""
+                log.warning("LLM attempt failed: %s %s", type(exc).__name__, status)
                 await asyncio.sleep(_rate_limit_wait(exc))
         raise LlmError(f"LLM failed after {attempts} attempts") from last_error
 
     async def _complete(self, system: str, user: str, timeout: float) -> str:
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ]
+        await asyncio.sleep(book(estimate_tokens(messages, MAX_REPLY_TOKENS)))
         response = await self._http.post(
             self._url,
             headers={"Authorization": f"Bearer {self._key}"},
             json={
                 "model": self._model,
                 "temperature": 0,
-                "max_tokens": 600,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
+                "max_tokens": MAX_REPLY_TOKENS,
+                "messages": messages,
             },
             timeout=timeout,
         )

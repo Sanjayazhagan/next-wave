@@ -19,12 +19,14 @@ import httpx
 from pydantic import BaseModel, ValidationError
 
 from .config import env
+from .pace import book, estimate_tokens
 
-T = TypeVar("T", bound=BaseModel)
+T =TypeVar("T", bound=BaseModel)
 TIMEOUT_SECONDS = 60
 RETRY_STATUSES = {429, 500, 502, 503}
 RATE_LIMIT_ATTEMPTS = 4
 MAX_RATE_LIMIT_WAIT = 30.0
+REPLY_TOKENS = 600
 
 _lock = threading.Lock()
 _calls = 0
@@ -89,7 +91,9 @@ def _wait_s(resp: httpx.Response, attempt: int) -> float:
 
 def _post(model: str, messages: list[dict]) -> tuple[str, dict]:
     url = f"{_env('LLM_BASE_URL').rstrip('/')}/chat/completions"
+    tokens = estimate_tokens(messages, REPLY_TOKENS)
     for attempt in range(RATE_LIMIT_ATTEMPTS):
+        time.sleep(book(tokens))
         resp = httpx.post(
             url,
             headers={"Authorization": f"Bearer {env('LLM_API_KEY', 'unused')}"},

@@ -57,9 +57,10 @@ def test_rate_limit_is_retried_then_http_errors_are_not_reprompted(env, monkeypa
     replies = iter([httpx.Response(429, headers={"retry-after": "1"}, request=httpx.Request("POST", "http://x")),
                     _reply('{"doc_type": "income"}')])
     waits = []
+    monkeypatch.setattr(llm, "book", lambda tokens: 0)
     monkeypatch.setattr(llm.time, "sleep", waits.append)
     monkeypatch.setattr(llm.httpx, "post", lambda url, headers, json, timeout: next(replies))
-    assert llm.text_json("hi", Answer, caller="t").doc_type == "income" and waits == [1.0]
+    assert llm.text_json("hi", Answer, caller="t").doc_type == "income" and waits == [0, 1.0, 0]
 
     calls = []
 

@@ -9,7 +9,7 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-TIMEOUT_SECONDS = 120
+TIMEOUT_SECONDS = 240
 
 
 @dataclass

@@ -123,7 +123,8 @@ def extract_pages(raw_pages: list[np.ndarray], doc_type: DocType | None = None, 
                              caller="extraction.extract", system=SYSTEM)
         all_lines = [ln for p in pages for ln in p.lines]
         for name in schema.model_fields:
-            r: Read = getattr(answer, name)
+            # Models send null for a field that isn't printed, such as a missing date.
+            r: Read = getattr(answer, name) or Read()
             value, evidence = typed(name, mask_text(r.value)), mask_text(r.evidence)
             conf, bbox = confidence.score(name, value, evidence, all_lines)
             if retry and value is not None and conf < RETRY_BELOW and bbox and name not in HELPER_FIELDS:
