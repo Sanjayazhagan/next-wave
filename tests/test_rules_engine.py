@@ -77,8 +77,10 @@ def test_passed_deadline_makes_scheme_not_eligible(tmp_path):
 
 def test_core_community_buttons(tmp_path):
     s = scheme(tmp_path, [COMMUNITY])
-    assert match(s, profile(community="sc_st")).status == "not_eligible"     # no SC/ST member qualifies
-    assert match(s, profile(community="bc")).status == "needs_info"          # BC/MBC button: BCM/OBC uncertain
+    assert match(s, profile(community="SC / ST")).status == "not_eligible"   # no SC/ST member qualifies
+    assert match(s, profile(community="BC / MBC")).status == "needs_info"    # BC/MBC answer: BCM/OBC uncertain
+    assert match(s, profile(community="sc_st")).status == "not_eligible"     # button ids work too
+    assert match(s, profile(community="General")).status == "not_eligible"
     assert match(s, profile(community="Most Backward Class")).status == "eligible"
 
 

@@ -26,10 +26,10 @@ class FieldRead(BaseModel):
     evidence: str | None = None       # printed text the value was read from (masked)
     bbox: list[float] | None = None   # x, y, w, h on the cleaned page image
 
-    def as_text(self) -> str:
-        """String form used in contracts.profile.ProfileField."""
+    def as_text(self, field: str = "") -> str:
+        """String form used in contracts.profile.ProfileField (date of birth as DD-MM-YYYY, per core)."""
         if isinstance(self.value, date):
-            return self.value.isoformat()
+            return self.value.strftime("%d-%m-%Y") if field == "date_of_birth" else self.value.isoformat()
         if isinstance(self.value, float) and self.value.is_integer():
             return str(int(self.value))
         return str(self.value)

@@ -53,9 +53,10 @@ def test_extract_returns_contract_types(tmp_path, monkeypatch):
     doc = result.documents[0]
     assert doc.document_type == "income" and doc.file_ref == "core-ref-1"
     assert result.profile.fields["annual_income"].value == "250000"
-    assert result.profile.fields["issue_date"].value == "2025-06-01"
+    assert doc.fields["issue_date"].value == "2025-06-01"          # certificate details stay on the document
+    assert "issue_date" not in result.profile.fields
     assert result.profile.fields["full_name"].confidence >= 0.95
-    assert result.profile.fields["aadhaar_last4"].value == "9012"
+    assert doc.fields["aadhaar_last4"].value == "9012"
     assert "1234 5678 9012" not in result.model_dump_json()
     # A low-confidence field (the masked certificate number) may get one zoomed retry.
     assert prompts[:2] == ["extraction.classify", "extraction.extract"]
@@ -65,3 +66,21 @@ def test_extract_returns_contract_types(tmp_path, monkeypatch):
 def test_unreadable_upload_is_skipped(monkeypatch):
     result = asyncio.run(load_plugins().extraction([DocumentImage(file_ref="x", mime_type="image/jpeg", data=b"junk")]))
     assert result.documents == [] and result.profile.fields == {}
+
+
+def test_profile_only_holds_core_field_names(tmp_path, monkeypatch):
+    """Certificate details stay on the document; the profile uses core's FIELD_NAMES only."""
+    from common.fields import PROFILE_FIELDS
+    from modules.extraction.merge import to_contract
+    from modules.extraction.models import DocResult, FieldRead, Quality
+    from datetime import date
+
+    q = Quality(blur_score=100, brightness=150, skew_deg=0, too_blurry=False, too_dark=False)
+    doc = DocResult(doc_id="d", doc_type="income", quality=q, fields={
+        "full_name": FieldRead(value="Satyajit", confidence=1), "date_of_birth": FieldRead(value=date(2006, 7, 23), confidence=1),
+        "certificate_number": FieldRead(value="TN-1", confidence=1), "qr_status": FieldRead(value="decoded", confidence=1)})
+    from modules.extraction.merge import merge_profile
+    contract = to_contract(doc, "ref")
+    profile = merge_profile([contract])
+    assert set(profile.fields) <= PROFILE_FIELDS and profile.fields["date_of_birth"].value == "23-07-2006"
+    assert "certificate_number" in contract.fields and "qr_status" in contract.fields

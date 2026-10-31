@@ -84,7 +84,7 @@ unmodelled:                     # criteria the engine can't test; shown as "also
 - Amounts go through `norm_amount` ("Rs. 2,50,000/-", "2.5 lakh"), communities
   through `norm_category` ("Most Backward Class" → `MBC`), states through a short
   alias list ("TN" → Tamil Nadu).
-- Core's community buttons (`bc`, `sc_st`, `general`) each stand for several
+- Core's community answers (`BC / MBC`, `SC / ST`, `General`) each stand for several
   categories; a rule passes only if every category in the group passes.
 - `questions.missing_questions(schemes, profile)` lists the unknown fields that
   block the most schemes, with fixed wording and button choices.

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from common.fields import COMMUNITY_BUTTONS
+from common.fields import COMMUNITY_BUTTONS, COMMUNITY_IDS
 from common.textnorm import norm_amount, norm_category, norm_text
 from contracts.profile import Profile
 
@@ -43,9 +43,11 @@ def _gender(s: str) -> str | None:
 def _candidates(field: str, raw: str) -> set[str] | None:
     """Possible normalised values. Core's community buttons stand for several categories."""
     if field == "community":
-        # Core's buttons store exactly "bc", "sc_st" or "general"; a document gives a code such as "BC".
-        if raw.strip() in COMMUNITY_BUTTONS:
-            return COMMUNITY_BUTTONS[raw.strip()]
+        # Core stores a group answer ("BC / MBC", "SC / ST", "General", or the lowercase button id);
+        # a document gives a precise code such as "BC" or "MBC".
+        group = COMMUNITY_IDS.get(raw.strip(), norm_text(raw))
+        if group in COMMUNITY_BUTTONS:
+            return COMMUNITY_BUTTONS[group]
         code = norm_category(raw)
         return {code} if code else None
     if field == "gender":

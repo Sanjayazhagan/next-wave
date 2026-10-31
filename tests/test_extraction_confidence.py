@@ -39,8 +39,8 @@ def _doc(doc_type, **fields):
 
 
 def test_merge_keeps_highest_confidence_and_user_answers():
-    prior = Profile(fields={"community": ProfileField(value="bc", source_document="user_answer", confidence=1.0)})
+    prior = Profile(fields={"community": ProfileField(value="BC / MBC", source_document="user_answer", confidence=1.0)})
     p = merge_profile([_doc("community", full_name=("S Satyajit", 0.7), community=("MBC", 0.99)),
                        _doc("marksheet", full_name=("S. Satyajit", 0.95))], prior)
     assert p.fields["full_name"].source_document == "marksheet"
-    assert p.fields["community"].value == "bc"
+    assert p.fields["community"].value == "BC / MBC"

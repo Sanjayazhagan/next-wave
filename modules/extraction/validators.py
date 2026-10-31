@@ -24,7 +24,7 @@ def check(field: str, value: object, today: date | None = None) -> bool:
     if field == "date_of_birth":
         d = norm_date(value) if not isinstance(value, date) else value
         return d is not None and 14 <= _age(d, today) <= 60
-    if field == "marks_percent":
+    if field == "marks_percentage":
         try:
             return 0 <= float(value) <= 100
         except (TypeError, ValueError):

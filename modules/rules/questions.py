@@ -8,7 +8,7 @@ from contracts.profile import Profile
 from .engine import match
 from .models import Question, Scheme
 
-PRIORITY = ["state", "course", "annual_income", "community", "year_of_study", "gender", "marks_percent"]
+PRIORITY = ["state", "course", "annual_income", "community", "year_of_study", "gender", "marks_percentage"]
 
 # Band answers store the band's upper bound, as an unverified user answer.
 INCOME_BANDS = {"Up to ₹1 lakh": "100000", "Up to ₹2.5 lakh": "250000", "Up to ₹8 lakh": "800000",
@@ -24,7 +24,7 @@ QUESTIONS = {
     "year_of_study": Question(field="year_of_study", text_en="Which year of your course are you in?",
                               choices=["1st year", "2nd year (lateral entry)", "2nd year", "3rd year", "4th year"]),
     "gender": Question(field="gender", text_en="What is your gender?", choices=["Female", "Male", "Transgender"]),
-    "marks_percent": Question(field="marks_percent", text_en="What percentage did you score in your last exam?"),
+    "marks_percentage": Question(field="marks_percentage", text_en="What percentage did you score in your last exam?"),
     "disability_percent": Question(field="disability_percent",
                                    text_en="Do you have a disability certificate? If yes, what percentage does it show?"),
     "govt_school_6_to_12": Question(field="govt_school_6_to_12",

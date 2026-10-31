@@ -50,7 +50,7 @@ def typed(field: str, raw: str | None) -> object:
         return strip_honorifics(raw)
     if field == "annual_income":
         return norm_amount(raw)
-    if field in ("marks_percent", "marks_total", "marks_max"):
+    if field in ("marks_percentage", "marks_total", "marks_max"):
         m = re.search(r"\d+(?:\.\d+)?", raw)
         return float(m.group()) if m else None
     if field == "exam_year":
@@ -161,14 +161,14 @@ def extract_paths(paths: list[Path], doc_type: DocType | None = None, doc_id: st
 
 
 def _fill_percent(reads: dict) -> None:
-    """Compute marks_percent from total and max when no percentage is printed."""
-    if "marks_percent" not in reads or reads["marks_percent"][0] is not None:
+    """Compute marks_percentage from total and max when no percentage is printed."""
+    if "marks_percentage" not in reads or reads["marks_percentage"][0] is not None:
         return
     total, max_ = reads.get("marks_total"), reads.get("marks_max")
     if total and max_ and total[0] and max_[0]:
         pct = round(100 * float(total[0]) / float(max_[0]), 2)
         if 0 <= pct <= 100:
-            reads["marks_percent"] = (pct, f"{total[1]} / {max_[1]}", min(total[2], max_[2]), total[3])
+            reads["marks_percentage"] = (pct, f"{total[1]} / {max_[1]}", min(total[2], max_[2]), total[3])
 
 
 def _log_run(doc_id: str, doc_type: str, pages: int, n_fields: int, seconds: float) -> None:

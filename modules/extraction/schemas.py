@@ -17,7 +17,7 @@ class Read(BaseModel):
 
 FIELDS_BY_TYPE: dict[str, list[str]] = {
     "marksheet": ["full_name", "father_name", "institution", "course", "year_of_study",
-                  "marks_percent", "marks_total", "marks_max", "exam_year"],
+                  "marks_percentage", "marks_total", "marks_max", "exam_year"],
     "income": ["full_name", "father_name", "annual_income", "district", "state",
                "certificate_number", "issue_date", "valid_until"],
     "community": ["full_name", "father_name", "caste", "community", "district", "state",

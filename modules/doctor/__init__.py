@@ -29,8 +29,9 @@ def _scheme(scheme_id: str | None):
 
 
 def to_contract(d: Diagnosis) -> DoctorResponse:
+    # allowed_to_continue is on core's integrate branch; on older contracts it's ignored.
     return DoctorResponse(mismatches=[Mismatch(field=f.field or f.check, detail=f.fix) for f in d.findings],
-                          risk_score=d.risk_score / 100)
+                          risk_score=d.risk_score / 100, allowed_to_continue=d.band != "blocked")
 
 
 def check_application(request: DoctorRequest) -> DoctorResponse:

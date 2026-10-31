@@ -24,7 +24,7 @@ T = TypeVar("T", bound=BaseModel)
 TIMEOUT_SECONDS = 60
 RETRY_STATUSES = {429, 500, 502, 503}
 RATE_LIMIT_ATTEMPTS = 4
-MAX_RATE_LIMIT_WAIT = 20.0
+MAX_RATE_LIMIT_WAIT = 30.0
 
 _lock = threading.Lock()
 _calls = 0

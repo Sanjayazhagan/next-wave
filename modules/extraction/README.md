@@ -12,7 +12,7 @@ Each upload is one document, classified as `marksheet`, `income` or `community`
 for the original upload, so core can still find the file to attach to the portal.
 
 Fields it fills: `full_name`, `father_name`, `institution`, `course`,
-`year_of_study`, `marks_percent`, `exam_year`, `annual_income`, `community`,
+`year_of_study`, `marks_percentage`, `exam_year`, `annual_income`, `community`,
 `district`, `state`, `certificate_number`, `issue_date`, `aadhaar_last4`.
 Values are strings: dates as `YYYY-MM-DD`, income as digits, community as a short
 code (`BC`, `MBC`, `SC`, ...).

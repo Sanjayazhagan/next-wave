@@ -1,6 +1,7 @@
 """Turn per-document reads into the shared contract types."""
 from __future__ import annotations
 
+from common.fields import PROFILE_FIELDS
 from contracts.documents import ExtractedDocument
 from contracts.profile import Profile, ProfileField
 
@@ -12,7 +13,7 @@ def to_contract(doc: DocResult, file_ref: str) -> ExtractedDocument:
     return ExtractedDocument(
         document_type=doc.doc_type,
         file_ref=file_ref,
-        fields={k: ProfileField(value=f.as_text(), source_document=doc.doc_type, confidence=f.confidence)
+        fields={k: ProfileField(value=f.as_text(k), source_document=doc.doc_type, confidence=f.confidence)
                 for k, f in doc.fields.items()},
     )
 
@@ -20,12 +21,14 @@ def to_contract(doc: DocResult, file_ref: str) -> ExtractedDocument:
 def merge_profile(docs: list[ExtractedDocument], prior: Profile | None = None) -> Profile:
     """Per field keep the highest-confidence value. User answers and edits are never overwritten.
 
+    Only core's profile field names (common.fields.PROFILE_FIELDS) are merged.
+
     Conflicting values between documents are left for the doctor to report.
     """
     merged = dict(prior.fields) if prior else {}
     for doc in docs:
         for key, field in doc.fields.items():
-            if key.startswith("qr_"):   # QR contents describe the document, not the person
+            if key not in PROFILE_FIELDS:   # certificate details stay on the document
                 continue
             cur = merged.get(key)
             if cur is None or (not cur.source_document.startswith("user_") and field.confidence > cur.confidence):

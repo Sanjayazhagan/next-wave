@@ -11,7 +11,7 @@ review page; nothing is ever submitted** (keep `ALLOW_REAL_SUBMIT=false` on core
 ```json
 {
   "language": "en",
-  "answers": {"state": "Tamil Nadu", "course": "B.E. first year", "annual_income": "240000", "community": "bc"},
+  "answers": {"state": "Tamil Nadu", "course": "B.E. first year", "annual_income": "240000", "community": "BC / MBC"},
   "documents": ["fixtures/docs/a_marksheet.jpg", "fixtures/docs/a_income.jpg"],
   "scheme_id": "aicte-pragati-degree",
   "portal_user_id": "<their portal login id>",
