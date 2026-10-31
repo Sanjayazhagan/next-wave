@@ -12,7 +12,6 @@ import time
 from pathlib import Path
 
 import httpx
-from dotenv import load_dotenv
 
 from modules.language.audio import to_wav16k
 from modules.language.providers.base import ProviderError
@@ -23,7 +22,6 @@ VOICE = Path(__file__).resolve().parents[1] / "fixtures" / "voice"
 
 
 async def main() -> None:
-    load_dotenv()
     ap = argparse.ArgumentParser()
     ap.add_argument("--lang", default=None, help="language hint; omit for auto-detect where supported")
     ap.add_argument("--sarvam-modes", default="transcribe,codemix")

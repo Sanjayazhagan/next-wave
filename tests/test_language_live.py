@@ -1,6 +1,5 @@
 """Live calls to the real providers. Skipped without keys or voice fixtures."""
 import asyncio
-import os
 
 import httpx
 import pytest
@@ -8,14 +7,15 @@ import pytest
 from modules.language.audio import to_wav16k
 from modules.language.providers.bhashini import Bhashini
 from modules.language.providers.sarvam import Sarvam
-from tests.remote_helpers import FIXTURES, needs_ffmpeg
+from tests.remote_helpers import FIXTURES, has_keys, live_env, needs_ffmpeg  # noqa: F401 (fixture)
 
 VOICE = sorted((FIXTURES / "voice").glob("*.ogg"))[:2] if (FIXTURES / "voice").is_dir() else []
 PROVIDERS = [p for p, keys in ((Sarvam, ["SARVAM_API_KEY"]),
                                (Bhashini, ["BHASHINI_USER_ID", "BHASHINI_ULCA_API_KEY", "BHASHINI_PIPELINE_ID"]))
-             if all(os.getenv(k) for k in keys)]
+             if has_keys(*keys)]
 
-pytestmark = [pytest.mark.live, needs_ffmpeg, pytest.mark.skipif(not PROVIDERS, reason="no provider keys")]
+pytestmark = [pytest.mark.live, needs_ffmpeg, pytest.mark.skipif(not PROVIDERS, reason="no provider keys"),
+              pytest.mark.usefixtures("live_env")]
 
 
 @pytest.mark.parametrize("provider_cls", PROVIDERS)

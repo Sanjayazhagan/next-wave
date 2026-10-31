@@ -10,8 +10,8 @@ carries on without the rule engine, as it does before this module is merged.
 from __future__ import annotations
 
 import logging
-import os
 
+from common.config import env
 from contracts.eligibility import EligibilityRequest, EligibilityResponse
 from contracts.eligibility import SchemeMatch as ContractMatch
 
@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 def portal_for(scheme_portal_id: str) -> str:
     """DEMO_PORTAL_ID, when set, sends the browser to the practice portal instead of the scheme's
     real portal. The scheme's name and cited rule stay real."""
-    return os.getenv("DEMO_PORTAL_ID") or scheme_portal_id
+    return env("DEMO_PORTAL_ID") or scheme_portal_id
 
 
 def rank_with(schemes: tuple[Scheme, ...] | list[Scheme], request: EligibilityRequest) -> EligibilityResponse:

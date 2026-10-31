@@ -15,11 +15,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import os
 import time
 from pathlib import Path
 
-from dotenv import load_dotenv
+from common.config import env
 
 from .bench import Row, write_csv
 from .policy import BenchProfile
@@ -34,8 +33,8 @@ STOP when you reach the review/preview page. NEVER click Submit, Final Submit, P
 async def one(profile: BenchProfile, url: str, timeout_s: float):
     from browser_use import Agent, ChatOpenAI
 
-    llm = ChatOpenAI(model=os.environ["LLM_MODEL"], base_url=os.environ["LLM_BASE_URL"],
-                     api_key=os.environ["LLM_API_KEY"])
+    llm = ChatOpenAI(model=env("LLM_MODEL"), base_url=env("LLM_BASE_URL"),
+                     api_key=env("LLM_API_KEY"))
     task = TASK.format(url=url, details=", ".join(f"{k}: {v}" for k, v in profile.answers.items()),
                        user=profile.portal_user_id or "(ask the supervisor)", docs=", ".join(profile.documents) or "none")
     agent = Agent(task=task, llm=llm)
@@ -43,7 +42,6 @@ async def one(profile: BenchProfile, url: str, timeout_s: float):
 
 
 def main() -> None:
-    load_dotenv()
     ap = argparse.ArgumentParser()
     ap.add_argument("--profile", type=Path, required=True)
     ap.add_argument("--url", required=True)

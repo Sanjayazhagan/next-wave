@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import os
 import random
 import time
 from dataclasses import asdict, dataclass
@@ -18,8 +17,8 @@ from datetime import datetime
 from pathlib import Path
 
 import httpx
-from dotenv import load_dotenv
 
+from common.config import env
 from common.textnorm import norm_text
 
 from .client import AgentClient
@@ -129,7 +128,6 @@ def write_csv(rows: list[Row], portal: str) -> Path:
 
 
 def main() -> None:
-    load_dotenv()
     ap = argparse.ArgumentParser()
     ap.add_argument("--profile", type=Path, required=True)
     ap.add_argument("--portal", default="portal", help="label for the CSV file name")
@@ -139,7 +137,7 @@ def main() -> None:
     ap.add_argument("--gap", type=float, nargs=2, default=(20, 40), help="seconds between runs (min max)")
     a = ap.parse_args()
     profile = BenchProfile.model_validate_json(a.profile.read_text())
-    client = AgentClient(os.getenv("AGENT_URL", "http://localhost:8000"), os.getenv("API_TOKEN", ""))
+    client = AgentClient(env("AGENT_URL", "http://localhost:8000"), env("API_TOKEN"))
     rng = random.Random(a.seed)
     rows, server_errors = [], 0
     for config in a.configs.split(","):

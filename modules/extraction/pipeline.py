@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import time
 import uuid
@@ -15,6 +14,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from common.config import env
 from common.llm import vision_json
 from common.textnorm import norm_amount, norm_category, norm_date
 
@@ -68,7 +68,7 @@ def _clean_page(raw: np.ndarray) -> tuple[_Page, dict[str, list[str]]]:
 
 
 def _save(pages: list[np.ndarray], doc_id: str) -> str:
-    work = Path(os.getenv("WORK_DIR", "./work"))
+    work = Path(env("WORK_DIR", "./work"))
     work.mkdir(parents=True, exist_ok=True)
     ims = [Image.fromarray(p) for p in pages]
     if len(ims) == 1:
@@ -163,7 +163,7 @@ def _fill_percent(reads: dict) -> None:
 
 
 def _log_run(doc_id: str, doc_type: str, pages: int, n_fields: int, seconds: float) -> None:
-    log_dir = Path(os.getenv("LOG_DIR", "./logs"))
+    log_dir = Path(env("LOG_DIR", "./logs"))
     log_dir.mkdir(parents=True, exist_ok=True)
     with open(log_dir / "extraction.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps({"ts": datetime.now(UTC).isoformat(), "doc_id": doc_id, "doc_type": doc_type,

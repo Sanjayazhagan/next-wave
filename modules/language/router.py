@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import logging
-import os
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
+
+from common.config import env
 
 from . import protect
 from .providers.base import Provider, ProviderError
@@ -34,7 +35,7 @@ class Router:
 
     def order(self, op: str) -> list[Provider]:
         """Primary first (STT_PRIMARY for speech-to-text, else LANG_PRIMARY); unconfigured providers dropped."""
-        primary = (os.getenv("STT_PRIMARY") if op == "stt" else None) or os.getenv("LANG_PRIMARY", "bhashini")
+        primary = (env("STT_PRIMARY") if op == "stt" else None) or env("LANG_PRIMARY", "bhashini")
         names = sorted(self.providers, key=lambda n: n != primary)
         return [self.providers[n] for n in names if self.providers[n].configured()]
 

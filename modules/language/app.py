@@ -8,16 +8,15 @@ import base64
 import binascii
 import json
 import logging
-import os
 import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
-from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 
+from common.config import env
 from contracts.language import SttRequest, SttResponse, TranslateRequest, TranslateResponse, TtsRequest, TtsResponse
 
 from .audio import AudioError, to_wav16k
@@ -25,7 +24,6 @@ from .providers.bhashini import Bhashini
 from .providers.sarvam import Sarvam
 from .router import AllProvidersFailed, Router
 
-load_dotenv()
 log = logging.getLogger(__name__)
 MAX_AUDIO_BYTES = 10_000_000
 
@@ -60,7 +58,7 @@ class TtsOut(TtsResponse):
 
 def _log(op: str, provider: str | None, latency_ms: int | None, ok: bool, input_len: int, request_id: str) -> None:
     """One line per request. Never the text or audio itself."""
-    log_dir = Path(os.getenv("LOG_DIR", "./logs"))
+    log_dir = Path(env("LOG_DIR", "./logs"))
     log_dir.mkdir(parents=True, exist_ok=True)
     with open(log_dir / "language.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps({"ts": datetime.now(UTC).isoformat(), "request_id": request_id, "op": op,

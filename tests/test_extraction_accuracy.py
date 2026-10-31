@@ -1,6 +1,5 @@
 """Field-level accuracy on real fixtures. Skips when fixtures/ or keys are missing."""
 import json
-import os
 import re
 from collections import defaultdict
 from pathlib import Path
@@ -9,7 +8,7 @@ import pytest
 
 from common.textnorm import norm_text
 
-from tests.remote_helpers import FIXTURES, ROOT, needs_tesseract
+from tests.remote_helpers import FIXTURES, ROOT, has_keys, live_env, needs_tesseract  # noqa: F401 (fixture)
 
 DOCS = FIXTURES / "docs"
 GT = FIXTURES / "ground_truth"
@@ -29,7 +28,8 @@ def _cases():
 @needs_tesseract
 @pytest.mark.live
 @pytest.mark.skipif(not _cases(), reason="no fixtures with ground truth")
-@pytest.mark.skipif(not os.getenv("VISION_MODEL") and os.getenv("LLM_BASE_URL"), reason="VISION_MODEL or LLM_BASE_URL not set")
+@pytest.mark.skipif(not has_keys("VISION_MODEL", "LLM_BASE_URL", "LLM_API_KEY"), reason="LLM keys not set in .env")
+@pytest.mark.usefixtures("live_env")
 def test_accuracy():
     from modules.extraction.pipeline import extract_paths
 

@@ -1,8 +1,9 @@
 """Provider interface: every provider speaks ISO 639-1 codes and WAV audio."""
 from __future__ import annotations
 
-import os
 from typing import Protocol
+
+from common.config import env
 
 
 class ProviderError(RuntimeError):
@@ -26,5 +27,5 @@ class Provider(Protocol):
 def timeout_s(op: str) -> float:
     """Speech-to-text gets longer than the other calls: a 20-second voice note takes a few seconds."""
     if op == "stt":
-        return float(os.getenv("STT_TIMEOUT_S", "15"))
-    return float(os.getenv("PROVIDER_TIMEOUT_S", "5"))
+        return float(env("STT_TIMEOUT_S", "15"))
+    return float(env("PROVIDER_TIMEOUT_S", "5"))

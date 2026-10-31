@@ -5,9 +5,10 @@ API reference (checked 31 Oct 2026): https://docs.sarvam.ai/api-reference/introd
 from __future__ import annotations
 
 import base64
-import os
 
 import httpx
+
+from common.config import env
 
 from ..langcodes import SARVAM_TTS, from_sarvam, to_sarvam
 from .base import ProviderError, timeout_s
@@ -23,7 +24,7 @@ class Sarvam:
 
     @staticmethod
     def _key() -> str:
-        return os.getenv("SARVAM_API_KEY", "")
+        return env("SARVAM_API_KEY", "")
 
     def configured(self) -> bool:
         return bool(self._key())
@@ -43,9 +44,9 @@ class Sarvam:
         return r.json()
 
     async def stt(self, wav: bytes, lang: str | None) -> tuple[str, str]:
-        data = {"model": os.getenv("SARVAM_STT_MODEL", "saaras:v3"),
+        data = {"model": env("SARVAM_STT_MODEL", "saaras:v3"),
                 "language_code": to_sarvam(lang) if lang else "unknown"}
-        if mode := os.getenv("SARVAM_STT_MODE", ""):   # e.g. codemix, for Tamil-English speech
+        if mode := env("SARVAM_STT_MODE", ""):   # e.g. codemix, for Tamil-English speech
             data["mode"] = mode
         body = await self._call("stt", "/speech-to-text", data=data, files={"file": ("audio.wav", wav, "audio/wav")})
         detected = from_sarvam(body.get("language_code")) or lang
@@ -56,15 +57,15 @@ class Sarvam:
     async def translate(self, text: str, src: str, tgt: str) -> str:
         body = await self._call("translate", "/translate", json={
             "input": text, "source_language_code": to_sarvam(src), "target_language_code": to_sarvam(tgt),
-            "model": os.getenv("SARVAM_TRANSLATE_MODEL", "sarvam-translate:v1")})
+            "model": env("SARVAM_TRANSLATE_MODEL", "sarvam-translate:v1")})
         return body["translated_text"]
 
     async def tts(self, text: str, lang: str, voice: str | None) -> tuple[bytes, str]:
         if lang not in SARVAM_TTS:
             raise ProviderError(f"sarvam tts: {lang} not supported")
         payload = {"text": text, "language_code": to_sarvam(lang),
-                   "model": os.getenv("SARVAM_TTS_MODEL", "bulbul:v3")}
-        if speaker := (voice or os.getenv("SARVAM_TTS_SPEAKER", "")):
+                   "model": env("SARVAM_TTS_MODEL", "bulbul:v3")}
+        if speaker := (voice or env("SARVAM_TTS_SPEAKER", "")):
             payload["speaker"] = speaker
         body = await self._call("tts", "/text-to-speech", json=payload)
         audios = body.get("audios") or []

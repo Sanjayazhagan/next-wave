@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import base64
 import json
-import os
 import threading
 import time
 from datetime import UTC, datetime
@@ -17,10 +16,9 @@ from pathlib import Path
 from typing import TypeVar
 
 import httpx
-from dotenv import load_dotenv
 from pydantic import BaseModel, ValidationError
 
-load_dotenv()
+from .config import env
 
 T = TypeVar("T", bound=BaseModel)
 TIMEOUT_SECONDS = 60
@@ -39,14 +37,14 @@ def llm_calls_total() -> int:
 
 
 def _env(name: str) -> str:
-    value = os.getenv(name, "")
+    value = env(name)
     if not value:
         raise LLMError(f"{name} is not set; see .env.example")
     return value
 
 
 def _log(record: dict) -> None:
-    log_dir = Path(os.getenv("LOG_DIR", "./logs"))
+    log_dir = Path(env("LOG_DIR", "./logs"))
     log_dir.mkdir(parents=True, exist_ok=True)
     with _lock, open(log_dir / "llm.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps(record) + "\n")
@@ -77,7 +75,7 @@ def _post(model: str, messages: list[dict]) -> tuple[str, dict]:
     url = f"{_env('LLM_BASE_URL').rstrip('/')}/chat/completions"
     resp = httpx.post(
         url,
-        headers={"Authorization": f"Bearer {os.getenv('LLM_API_KEY', 'unused')}"},
+        headers={"Authorization": f"Bearer {env('LLM_API_KEY', 'unused')}"},
         json={"model": model, "temperature": 0, "messages": messages,
               "response_format": {"type": "json_object"}},
         timeout=TIMEOUT_SECONDS,

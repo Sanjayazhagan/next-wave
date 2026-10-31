@@ -7,10 +7,11 @@ serviceId per task; it is cached per (task, src, tgt) for an hour.
 from __future__ import annotations
 
 import base64
-import os
 import time
 
 import httpx
+
+from common.config import env
 
 from .base import ProviderError, timeout_s
 
@@ -26,7 +27,7 @@ class Bhashini:
         self._cache: dict[tuple, tuple[float, dict]] = {}
 
     def configured(self) -> bool:
-        return all(os.getenv(k) for k in ("BHASHINI_USER_ID", "BHASHINI_ULCA_API_KEY", "BHASHINI_PIPELINE_ID"))
+        return all(env(k) for k in ("BHASHINI_USER_ID", "BHASHINI_ULCA_API_KEY", "BHASHINI_PIPELINE_ID"))
 
     async def _config(self, task: str, src: str, tgt: str | None) -> dict:
         key = (task, src, tgt)
@@ -35,8 +36,8 @@ class Bhashini:
             return hit[1]
         language = {"sourceLanguage": src, **({"targetLanguage": tgt} if tgt else {})}
         body = {"pipelineTasks": [{"taskType": task, "config": {"language": language}}],
-                "pipelineRequestConfig": {"pipelineId": os.getenv("BHASHINI_PIPELINE_ID")}}
-        headers = {"userID": os.getenv("BHASHINI_USER_ID", ""), "ulcaApiKey": os.getenv("BHASHINI_ULCA_API_KEY", "")}
+                "pipelineRequestConfig": {"pipelineId": env("BHASHINI_PIPELINE_ID")}}
+        headers = {"userID": env("BHASHINI_USER_ID", ""), "ulcaApiKey": env("BHASHINI_ULCA_API_KEY", "")}
         try:
             r = await self._http.post(CONFIG_URL, json=body, headers=headers, timeout=timeout_s(task))
             r.raise_for_status()
@@ -70,7 +71,7 @@ class Bhashini:
 
     async def stt(self, wav: bytes, lang: str | None) -> tuple[str, str]:
         # Bhashini ASR needs the spoken language; without a hint use the deployment default.
-        lang = lang or os.getenv("STT_DEFAULT_LANG", "ta")
+        lang = lang or env("STT_DEFAULT_LANG", "ta")
         out = await self._compute("asr", lang, None, {"audioFormat": "wav", "samplingRate": 16000},
                                   {"audio": [{"audioContent": base64.b64encode(wav).decode()}]})
         return out["output"][0]["source"], lang
@@ -80,6 +81,6 @@ class Bhashini:
         return out["output"][0]["target"]
 
     async def tts(self, text: str, lang: str, voice: str | None) -> tuple[bytes, str]:
-        gender = voice if voice in ("male", "female") else os.getenv("BHASHINI_TTS_GENDER", "female")
+        gender = voice if voice in ("male", "female") else env("BHASHINI_TTS_GENDER", "female")
         out = await self._compute("tts", lang, None, {"gender": gender}, {"input": [{"source": text}]})
         return base64.b64decode(out["audio"][0]["audioContent"]), "audio/wav"
