@@ -12,13 +12,14 @@ from __future__ import annotations
 import logging
 
 from common.config import env
-from contracts.eligibility import EligibilityRequest, EligibilityResponse
+from contracts.eligibility import EligibilityRequest, EligibilityResponse, SchemeQuestion
 from contracts.eligibility import SchemeMatch as ContractMatch
 
 from .engine import rank
 from .explain import cited_clause
 from .loader import load_all
-from .models import Scheme
+from .models import Question, Scheme
+from .questions import missing_questions
 
 log = logging.getLogger(__name__)
 
@@ -29,13 +30,28 @@ def portal_for(scheme_portal_id: str) -> str:
     return env("DEMO_PORTAL_ID") or scheme_portal_id
 
 
+# Value to store -> button label, for answers the rules compare exactly.
+ANSWERS = {
+    "gender": {"female": "Female", "male": "Male", "transgender": "Transgender"},
+    "disability_percent": {"40": "Yes, 40% or more", "10": "Yes, under 40%", "0": "No"},
+    "govt_school_6_to_12": {"yes": "Yes", "no": "No"},
+}
+
+
+def to_contract(question: Question) -> SchemeQuestion:
+    labels = question.choices or []
+    choices = ANSWERS.get(question.field) or dict(zip(labels, labels, strict=True))
+    return SchemeQuestion(field=question.field, text=question.text_en, choices=choices)
+
+
 def rank_with(schemes: tuple[Scheme, ...] | list[Scheme], request: EligibilityRequest) -> EligibilityResponse:
     """Eligible and needs-info schemes, best first. Schemes the user fails are left out."""
     matches = [m for m in rank(schemes, request.profile) if m.status != "not_eligible"]
     return EligibilityResponse(schemes=[
         ContractMatch(scheme_id=m.scheme_id, name=m.name, portal_id=portal_for(m.portal_id), rank=i,
                       cited_clause=cited_clause(m))
-        for i, m in enumerate(matches, start=1)])
+        for i, m in enumerate(matches, start=1)],
+        questions=[to_contract(q) for q in missing_questions(schemes, request.profile)])
 
 
 SCHEMES = load_all()

@@ -374,3 +374,29 @@ def test_modules_load_as_callable_or_none() -> None:
     plugins = load_plugins()
     for plugin in (plugins.rules, plugins.doctor, plugins.extraction, plugins.compressor):
         assert plugin is None or callable(plugin)
+
+
+def upload_page() -> Snapshot:
+    return Snapshot(url="https://portal.example/form", nodes=[
+        PageNode(ref="a", role="file", name="Marksheet"),
+        PageNode(ref="b", role="button", name="Submit application"),
+    ])
+
+
+def test_review_cannot_skip_a_document_we_hold() -> None:
+    planner = Planner(ScriptedLlm({"action": "review"}), SUBMIT)
+    step = asyncio.run(planner.next_step("goal", upload_page(), {}, ["marksheet"], []))
+    assert (step.action, step.ref, step.document) == ("upload", "a", "marksheet")
+
+
+def test_review_goes_ahead_once_the_document_is_sent() -> None:
+    planner = Planner(ScriptedLlm({"action": "review"}), SUBMIT)
+    sent = [{"document": "marksheet", "target": {"role": "file", "name": "Marksheet"}}]
+    step = asyncio.run(planner.next_step("goal", upload_page(), {}, ["marksheet"], [], sent))
+    assert step.action == "review"
+
+
+def test_review_with_several_uploads_left_is_not_guessed() -> None:
+    planner = Planner(ScriptedLlm({"action": "review"}), SUBMIT)
+    with pytest.raises(PlanError):
+        asyncio.run(planner.next_step("goal", upload_page(), {}, ["marksheet", "photo"], []))

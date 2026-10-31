@@ -142,3 +142,50 @@ def test_central_obc_certificate_is_unknown_for_state_categories(tmp_path):
     s = scheme(tmp_path, [COMMUNITY])
     assert match(s, profile(community="OBC")).status == "needs_info"
     assert match(s, profile(community="OC")).status == "not_eligible"
+
+
+def ranked(**answers: str):
+    import modules.rules as rules
+    from contracts.eligibility import EligibilityRequest
+    from contracts.profile import Profile, ProfileField
+
+    values = {"state": "Tamil Nadu", "course": "B.E. first year", "annual_income": "200000",
+              "community": "BC / MBC", **answers}
+    profile = Profile(fields={
+        name: ProfileField(value=value, source_document="user_answer", confidence=1.0)
+        for name, value in values.items()
+    })
+    return rules.rank_schemes(EligibilityRequest(profile=profile))
+
+
+def test_undecided_details_come_back_as_questions_with_buttons() -> None:
+    questions = {q.field: q for q in ranked().questions}
+    assert "gender" in questions
+    assert questions["gender"].choices["male"] == "Male"
+
+
+def test_a_boy_is_not_offered_a_girls_scheme() -> None:
+    names = [s.scheme_id for s in ranked(gender="male").schemes]
+    assert "aicte-pragati-degree" not in names
+    assert "pudhumai-penn" not in names
+
+
+def test_a_girl_keeps_the_girls_scheme() -> None:
+    assert "aicte-pragati-degree" in [s.scheme_id for s in ranked(gender="female").schemes]
+
+
+def test_under_forty_percent_disability_rules_out_saksham() -> None:
+    names = [s.scheme_id for s in ranked(disability_percent="10").schemes]
+    assert "aicte-saksham-degree" not in names
+
+
+def test_no_questions_remain_once_all_are_answered() -> None:
+    answers = {
+        "gender": "female", "disability_percent": "0", "govt_school_6_to_12": "no",
+        "community": "BC",
+    }
+    assert ranked(**answers).questions == []
+
+
+def test_a_grouped_community_is_asked_exactly_when_it_decides_a_scheme() -> None:
+    assert "community" in [q.field for q in ranked().questions]

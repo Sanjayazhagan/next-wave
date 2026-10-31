@@ -2,6 +2,7 @@ FROM python:3.12-slim
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core fonts-indic \
+        tesseract-ocr tesseract-ocr-tam \
     && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir uv==0.10.7
 
@@ -23,6 +24,8 @@ RUN useradd --create-home --uid 1001 agent \
 ENV DATABASE_PATH=/data/app.db \
     CHECKPOINT_PATH=/data/checkpoints.db \
     FILES_PATH=/data/files \
+    WORK_DIR=/data/work \
+    LOG_DIR=/data/logs \
     PATH=/srv/app/.venv/bin:/opt/freellmpool/bin:$PATH
 
 EXPOSE 8000

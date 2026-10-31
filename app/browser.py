@@ -35,6 +35,12 @@ class BrowserWorker(Protocol):
 
     async def close(self, session_id: str) -> None: ...
 
+    async def authorize_submit(
+        self, session_id: str, approval_ref: str, observation_id: str
+    ) -> None:
+        """Called only when a snapshot carries an observation_id."""
+        ...
+
 
 class HttpBrowserWorker:
     def __init__(self, settings: Settings, http: httpx.AsyncClient) -> None:

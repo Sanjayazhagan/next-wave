@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     browser_product_url: str = ""
     browser_product_key: str = ""
     # "portal" runs its fixed mock portal. "general" drives real pages step by step.
-    browser_product_mode: Literal["portal", "general"] = "portal"
+    browser_product_mode: Literal["portal", "general", "bridge"] = "portal"
     # For "general": JSON mapping each portal_id to its start page.
     portal_urls: str = "{}"
     # The browser service's own ceiling, whatever a form allows. Raise it with the service.

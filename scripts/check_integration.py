@@ -7,6 +7,7 @@ A module that passes here works in the agent, with no change to the agent.
 """
 import argparse
 import asyncio
+import shutil
 import base64
 import inspect
 import sys
@@ -76,6 +77,9 @@ def problems_with_fields(fields: dict[str, ProfileField]) -> list[str]:
 
 
 async def check_extraction(function: Callable, document: Path | None) -> Result:
+    # Without Tesseract his pipeline skips every document, and only logs a warning.
+    if function.__module__.startswith("modules.extraction") and not shutil.which("tesseract"):
+        return Result("Document extraction", FAILED, "install tesseract-ocr, or nothing is read")
     data = document.read_bytes() if document else SAMPLE_IMAGE
     mime_type = "application/pdf" if document and document.suffix == ".pdf" else "image/jpeg"
     image = DocumentImage(file_ref="a" * 32, mime_type=mime_type, data=data)

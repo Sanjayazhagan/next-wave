@@ -91,6 +91,7 @@ The service in `browser-product/` is already connected. Two settings choose the 
 | --- | --- | --- | --- |
 | `portal` | v1 API | The fictional portal, end to end with OTP, CAPTCHA and a receipt | `app/browser_product.py` |
 | `general` | v2 API | Real pages step by step, with skills and self-repair | `app/browser_general.py` |
+| `bridge` | `/core-browser` | Live pages: login, OTP and CAPTCHA go to the user, and the final submit needs an approval tied to the page shown | `app/browser_bridge.py` |
 
 To connect it, deploy the service, then set `BROWSER_PRODUCT_URL` and
 `BROWSER_PRODUCT_KEY` (its `INTERNAL_KEY`) on the server.

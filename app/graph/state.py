@@ -30,6 +30,8 @@ class AgentState(TypedDict, total=False):
     # Scheme
     schemes: list[dict[str, Any]]
     rules_failed: bool
+    scheme_question: dict[str, Any] | None
+    asked_for_schemes: list[str]
     scheme: dict[str, Any] | None
     doctor_report: dict[str, Any] | None
     portal_id: str | None

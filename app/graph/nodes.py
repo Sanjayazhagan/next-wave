@@ -36,6 +36,9 @@ from contracts.profile import Profile, ProfileField
 from contracts.vault import Receipt
 
 log = logging.getLogger(__name__)
+LOGIN_BOX = re.compile(
+    r"user.?id|login.?id|registration.?id|application.?id|username|mobile number", re.I
+)
 
 MAX_STRIKES = 3
 MAX_BUTTONS = 3
@@ -324,10 +327,27 @@ class Nodes:
         except (PluginError, ValidationError) as exc:
             self._module_failed(state, "match_schemes", exc)
             return {"schemes": [], "rules_failed": True}
+        asked = state.get("asked_for_schemes", [])
+        unasked = [q for q in response.questions if q.field not in asked]
+        if unasked:
+            return {"scheme_question": unasked[0].model_dump()}
         schemes = sorted(response.schemes, key=lambda scheme: scheme.rank)
         if not schemes:
             return {"schemes": [], "outcome": "no_scheme", "final": {"text": messages.NO_SCHEME}}
         return {"schemes": [scheme.model_dump() for scheme in schemes]}
+
+    async def ask_scheme_question(self, state: AgentState) -> dict[str, Any]:
+        """Ask what decides a scheme, so nobody is told they qualify on a guess."""
+        question = state["scheme_question"]
+        reply = ask("scheme_detail", question["text"], question["choices"] or None)
+        value = chosen(reply) or typed(reply)
+        if not value:
+            return {}
+        return {
+            "scheme_question": None,
+            "asked_for_schemes": [*state.get("asked_for_schemes", []), question["field"]],
+            "profile": with_answer(state, question["field"], value, "user_answer"),
+        }
 
     async def choose_scheme(self, state: AgentState) -> dict[str, Any]:
         schemes = state["schemes"][:MAX_BUTTONS]
@@ -391,7 +411,20 @@ class Nodes:
             "challenge": None,
         }
 
+    async def _has_no_login_box(self, state: AgentState) -> bool:
+        """Live pages often open on information or a form, so ask for a login only
+        when one is on the page. The agent can still reach a login page later."""
+        try:
+            snapshot = await self.d.browser.snapshot(state["browser_session"])
+        except BrowserError:
+            return False
+        return bool(snapshot.observation_id) and not any(
+            LOGIN_BOX.search(node.name) for node in snapshot.nodes
+        )
+
     async def portal_login(self, state: AgentState) -> dict[str, Any]:
+        if await self._has_no_login_box(state):
+            return {"route": "again"}
         owner, portal_id = state["owner"], state["portal_id"]
         portal_user_id = self.d.vault.get_portal_id(owner, portal_id)
         if portal_user_id is None:
@@ -458,6 +491,7 @@ class Nodes:
                 known_values(state),
                 self._document_names(state),
                 history,
+                [step for step in state.get("trace", []) if step["action"] == "upload"],
             )
         except (LlmError, PlanError) as exc:
             return self._strike(state, f"Planning failed: {exc}")
@@ -754,10 +788,17 @@ class Nodes:
         button = self.d.planner.find_final_submit(snapshot)
         if button is None:
             return self._handover("Could not find the final submit button")
-        result = await self.d.browser.act(
-            browser_session,
-            Action(type="click", target={"role": button.role, "name": button.name}),
-        )
+        try:
+            if snapshot.observation_id:
+                await self.d.browser.authorize_submit(
+                    browser_session, state["session_id"], snapshot.observation_id
+                )
+            result = await self.d.browser.act(
+                browser_session,
+                Action(type="click", target={"role": button.role, "name": button.name}),
+            )
+        except BrowserError:
+            return self._handover(messages.SUBMIT_UNCERTAIN)
         if not result.ok:
             return self._handover(messages.SUBMIT_UNCERTAIN)
         snapshot = await self.d.browser.snapshot(browser_session)

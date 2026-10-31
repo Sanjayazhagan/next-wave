@@ -36,7 +36,9 @@ Choose the single next action towards the goal. Reply with only this JSON:
  "rule_text": "for upload: this control's rules, copied from PAGE TEXT",
  "intent": "short description of this step", "reasoning": "one sentence"}
 Rules for each action:
-- type: only into text inputs, with "field" set to a name from FIELDS.
+- type: only into a text input whose label clearly asks for that field, with "field"
+  set to a name from FIELDS. Never put a value into a box just because the box is
+  empty. If no label asks for what you hold, leave the box alone.
 - click: only buttons and links. Use it to move to the next page.
 - upload: on the upload control itself, with "document" set to a name from
   DOCUMENTS. Do not click the upload control. If PAGE TEXT states the file types
@@ -45,8 +47,10 @@ Rules for each action:
 - ask: only when an input on this page needs something that is not in FIELDS.
   Set "field" to a short snake_case name. Never ask for a name in FIELDS.
 - review: only when the page shows the button that finally submits the
-  application. Never press that button. Keep clicking Next or Continue until
-  you reach it.
+  application and you have done everything you can on that page. A form often has
+  its boxes and that button on one page, so fill the boxes and upload the documents
+  first. Never press that button. Keep clicking Next or Continue until you reach it.
+Decide only the next step on this page. Never conclude that it is the wrong page.
 Inputs whose value shows <field:name> are already filled, so leave them alone."""
 )
 
@@ -94,6 +98,7 @@ class Planner:
         known: Mapping[str, str],
         documents: Sequence[str],
         history: Sequence[str],
+        uploads: Sequence[Mapping[str, Any]] = (),
     ) -> PlannedStep:
         user = "\n".join(
             [
@@ -111,7 +116,28 @@ class Planner:
         except ValidationError as exc:
             raise PlanError("Model chose an invalid action") from exc
 
-        return self._checked(step, snapshot, known, documents)
+        return self._checked(step, snapshot, known, documents, uploads)
+
+    @staticmethod
+    def _upload_before_review(
+        step: PlannedStep,
+        snapshot: Snapshot,
+        documents: Sequence[str],
+        uploads: Sequence[Mapping[str, Any]],
+    ) -> PlannedStep:
+        """A review must not skip a document we hold and a box still waiting for it."""
+        sent = {upload.get("document") for upload in uploads}
+        filled = {(upload.get("target") or {}).get("name") for upload in uploads}
+        unsent = [document for document in documents if document not in sent]
+        boxes = [n for n in snapshot.nodes if n.role == "file" and n.name not in filled]
+        if not unsent or not boxes:
+            return step
+        if len(unsent) > 1 or len(boxes) > 1:
+            raise PlanError("Model chose review with documents still to upload")
+        return step.model_copy(update={
+            "action": "upload", "ref": boxes[0].ref, "document": unsent[0],
+            "intent": "Upload the document",
+        })
 
     def _checked(
         self,
@@ -119,6 +145,7 @@ class Planner:
         snapshot: Snapshot,
         known: Mapping[str, str],
         documents: Sequence[str],
+        uploads: Sequence[Mapping[str, Any]] = (),
     ) -> PlannedStep:
         """Enforce the rules in code, because free models often break them."""
         if step.action == "wait":
@@ -126,7 +153,7 @@ class Planner:
         if step.action == "review":
             if self.find_final_submit(snapshot) is None:
                 raise PlanError("Model chose review before reaching the review page")
-            return step
+            return self._upload_before_review(step, snapshot, documents, uploads)
         if step.action == "ask":
             return self._checked_ask(step, snapshot, known)
 

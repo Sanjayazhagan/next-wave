@@ -65,6 +65,8 @@ class Snapshot(BaseModel):
     page_text: str = ""
     # What the browser itself can carry, whatever a form allows.
     upload_limits: FileRules | None = None
+    # Set by a browser that ties the final submit to the exact page approved.
+    observation_id: str | None = None
 
     def find(self, target: Target) -> PageNode | None:
         for node in self.nodes:

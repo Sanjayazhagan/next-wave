@@ -16,7 +16,8 @@ def build_graph(deps: Deps, checkpointer: BaseCheckpointSaver) -> Any:
     for name in (
         "choose_language", "consent", "intake_think", "intake_listen", "ask_question",
         "confirm_details", "fix_details",
-        "collect_documents", "extract_profile", "match_schemes", "choose_scheme", "doctor", "prepare_portal",
+        "collect_documents", "extract_profile", "match_schemes", "ask_scheme_question",
+        "choose_scheme", "doctor", "prepare_portal",
         "portal_login", "browser_step", "challenge", "ask_field", "handover",
         "save_skill", "prepare_review", "review", "edit", "submit", "receipt",
         "finish",
@@ -53,6 +54,8 @@ def build_graph(deps: Deps, checkpointer: BaseCheckpointSaver) -> Any:
         return "fix_details" if state.get("fix_error") else "confirm_details"
 
     def after_match(state: AgentState) -> str:
+        if state.get("scheme_question"):
+            return "ask_scheme_question"
         if state.get("rules_failed"):
             return "collect_documents"  # Carries on with the default portal.
         return "finish" if state.get("final") else "choose_scheme"
@@ -108,7 +111,13 @@ def build_graph(deps: Deps, checkpointer: BaseCheckpointSaver) -> Any:
     )
     graph.add_conditional_edges("fix_details", after_fix, ["fix_details", "confirm_details"])
     graph.add_conditional_edges(
-        "match_schemes", after_match, ["choose_scheme", "collect_documents", "finish"]
+        "match_schemes", after_match,
+        ["ask_scheme_question", "choose_scheme", "collect_documents", "finish"],
+    )
+    graph.add_conditional_edges(
+        "ask_scheme_question",
+        lambda state: "ask_scheme_question" if state.get("scheme_question") else "match_schemes",
+        ["ask_scheme_question", "match_schemes"],
     )
     graph.add_conditional_edges(
         "choose_scheme", after_choice, ["choose_scheme", "collect_documents"]

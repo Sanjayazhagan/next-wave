@@ -13,6 +13,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from app.api import router as session_router
 from app.assistant import Assistant
 from app.browser import BrowserWorker, HttpBrowserWorker
+from app.browser_bridge import BridgeBrowserWorker
 from app.browser_general import GeneralBrowserWorker
 from app.browser_product import BrowserProductWorker
 from app.channels import ChannelError, RoutedChannel
@@ -78,6 +79,8 @@ def create_app(
             worker = browser
         elif settings.browser_product_url and settings.browser_product_mode == "general":
             worker = GeneralBrowserWorker(settings, client)
+        elif settings.browser_product_url and settings.browser_product_mode == "bridge":
+            worker = BridgeBrowserWorker(settings, client)
         elif settings.browser_product_url:
             worker = BrowserProductWorker(settings, client)
         elif settings.use_standins:
