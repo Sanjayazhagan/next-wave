@@ -1,4 +1,3 @@
-# DRAFT, not loaded. Review each value against raw/aicte-pragati-degree/*.txt, then add
 # a `review:` block and rename to aicte-pragati-degree.yaml.
 scheme_id: aicte-pragati-degree
 name: AICTE Pragati Scholarship Scheme for Girl Students (Technical Degree)
@@ -10,6 +9,10 @@ required_docs: [marksheet, income, community]
 sources:
   - url: https://www.myscheme.gov.in/schemes/psgs-deg
     scraped_at: 2026-10-31
+review:
+  # Every clause checked word for word against the saved snapshot in raw/ (the loader enforces this).
+  reviewed_by: claude (verbatim check), approved by satyajit
+  reviewed_at: 2026-10-31
 rules:
   - id: girl-student
     field: gender

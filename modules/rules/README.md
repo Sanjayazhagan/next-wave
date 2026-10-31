@@ -31,10 +31,17 @@ core logs the error.
 
 | scheme_id | Portal | Source | Status |
 | --- | --- | --- | --- |
-| `aicte-pragati-degree` | nsp | myscheme.gov.in/schemes/psgs-deg | draft, needs review |
-| `aicte-saksham-degree` | nsp | myscheme.gov.in/schemes/sak-deg | draft, needs review |
-| `pudhumai-penn` | tn_scholarship | myscheme.gov.in/schemes/pudhumai-penn-scheme | draft, needs review |
-| `tn-postmatric-bc-mbc-dnc` | tn_scholarship | myscheme.gov.in/schemes/pmstn, bcmbcmw.tn.gov.in/welfschemes.htm | draft, needs review |
+| `aicte-pragati-degree` | nsp | myscheme.gov.in/schemes/psgs-deg | reviewed |
+| `aicte-saksham-degree` | nsp | myscheme.gov.in/schemes/sak-deg | reviewed |
+| `pudhumai-penn` | tn_scholarship | myscheme.gov.in/schemes/pudhumai-penn-scheme | reviewed |
+| `tn-postmatric-bc-mbc-dnc` | tn_scholarship | myscheme.gov.in/schemes/pmstn, bcmbcmw.tn.gov.in/welfschemes.htm | reviewed |
+
+Reviewed means every clause was checked word for word against its saved snapshot
+(the loader re-checks this on every start) and Satyajit approved the files.
+
+**Demo portal.** The browser worker only knows the practice portal. Set
+`DEMO_PORTAL_ID` to its id and every scheme keeps its real name and cited rule,
+but the browser is sent to the practice portal. Leave it blank for real portals.
 
 Dropped after checking the sources: the myScheme slug `csss` is J&K's Contributory
 Social Security Scheme, not the Central Sector Scholarship, and `pmssc` is Punjab's

@@ -10,6 +10,7 @@ carries on without the rule engine, as it does before this module is merged.
 from __future__ import annotations
 
 import logging
+import os
 
 from contracts.eligibility import EligibilityRequest, EligibilityResponse
 from contracts.eligibility import SchemeMatch as ContractMatch
@@ -22,11 +23,18 @@ from .models import Scheme
 log = logging.getLogger(__name__)
 
 
+def portal_for(scheme_portal_id: str) -> str:
+    """DEMO_PORTAL_ID, when set, sends the browser to the practice portal instead of the scheme's
+    real portal. The scheme's name and cited rule stay real."""
+    return os.getenv("DEMO_PORTAL_ID") or scheme_portal_id
+
+
 def rank_with(schemes: tuple[Scheme, ...] | list[Scheme], request: EligibilityRequest) -> EligibilityResponse:
     """Eligible and needs-info schemes, best first. Schemes the user fails are left out."""
     matches = [m for m in rank(schemes, request.profile) if m.status != "not_eligible"]
     return EligibilityResponse(schemes=[
-        ContractMatch(scheme_id=m.scheme_id, name=m.name, portal_id=m.portal_id, rank=i, cited_clause=cited_clause(m))
+        ContractMatch(scheme_id=m.scheme_id, name=m.name, portal_id=portal_for(m.portal_id), rank=i,
+                      cited_clause=cited_clause(m))
         for i, m in enumerate(matches, start=1)])
 
 

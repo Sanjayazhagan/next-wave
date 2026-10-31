@@ -1,5 +1,4 @@
-# DRAFT, not loaded. Review against raw/pudhumai-penn/*.txt, add `review:`, rename.
-# benefit_inr is 12 x the monthly ₹1,000 in the source; check before approving.
+# benefit_inr is 12 x the monthly ₹1,000 in the source.
 scheme_id: pudhumai-penn
 name: Moovalur Ramamirtham Ammaiyar Higher Education Assurance Scheme (Pudhumai Penn)
 portal_id: tn_scholarship
@@ -10,6 +9,10 @@ required_docs: [marksheet]
 sources:
   - url: https://www.myscheme.gov.in/schemes/pudhumai-penn-scheme
     scraped_at: 2026-10-31
+review:
+  # Every clause checked word for word against the saved snapshot in raw/ (the loader enforces this).
+  reviewed_by: claude (verbatim check), approved by satyajit
+  reviewed_at: 2026-10-31
 rules:
   - id: tn-resident
     field: state

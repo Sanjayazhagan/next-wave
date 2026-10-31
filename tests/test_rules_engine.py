@@ -116,3 +116,21 @@ def test_questions_on_empty_profile(tmp_path):
                scheme(tmp_path, [STATE, INCOME], scheme_id="y")]
     fields = [q.field for q in missing_questions(schemes, Profile())]
     assert fields[:2] == ["state", "annual_income"] and "community" in fields
+
+
+def test_demo_portal_sends_browser_to_practice_portal(tmp_path, monkeypatch):
+    a = scheme(tmp_path, [INCOME], scheme_id="a")
+    req = EligibilityRequest(profile=profile(annual_income=1))
+    assert rank_with([a], req).schemes[0].portal_id == "nsp"
+    monkeypatch.setenv("DEMO_PORTAL_ID", "mock-scholarship")
+    s = rank_with([a], req).schemes[0]
+    assert s.portal_id == "mock-scholarship" and s.name == "Test a" and "example.gov.in" in s.cited_clause
+
+
+def test_committed_rules_load_and_plugin_is_on():
+    import modules.rules as rules
+    from app.plugins import load_plugins
+
+    assert {s.scheme_id for s in rules.SCHEMES} == {
+        "aicte-pragati-degree", "aicte-saksham-degree", "pudhumai-penn", "tn-postmatric-bc-mbc-dnc"}
+    assert load_plugins().rules is rules.rank_schemes

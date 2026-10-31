@@ -1,6 +1,7 @@
 """Check chaos.js on test_form.html: every mode, three seeds.
 
-    uv run python -m modules.chaos.run_local
+    uv run python -m modules.chaos.run_local          # headless, all modes and seeds
+    uv run python -m modules.chaos.run_local --show   # watch it in a browser window, slowed down
 
 For each run: load the form, inject chaos, fill every field BY `name` attribute,
 open any <details>, close any popup, submit, and check the submitted values are
@@ -45,14 +46,19 @@ def run_once(page, mode: str, seed: int) -> tuple[list, dict]:
 
 
 def main() -> int:
+    import argparse
+
     from playwright.sync_api import sync_playwright
 
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--show", action="store_true", help="open a visible browser and slow it down")
+    show = ap.parse_args().show
     failures = 0
     with sync_playwright() as p:
-        browser = p.chromium.launch()
+        browser = p.chromium.launch(headless=not show, slow_mo=400 if show else 0)
         page = browser.new_page()
         for mode in MODES:
-            for seed in SEEDS:
+            for seed in (SEEDS[:1] if show else SEEDS):
                 log, out = run_once(page, mode, seed)
                 again, _ = run_once(page, mode, seed)
                 ms = out.pop("_ms")
