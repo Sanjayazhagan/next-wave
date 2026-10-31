@@ -320,9 +320,8 @@ def test_skill_versions_carry_counts_forward(tmp_path: Path) -> None:
     store.close()
 
 
-def test_missing_modules_load_as_none() -> None:
+def test_modules_load_as_callable_or_none() -> None:
+    # The remote modules are merged one by one; each is either missing or callable.
     plugins = load_plugins()
-    assert plugins.rules is None
-    assert plugins.doctor is None
-    assert plugins.extraction is None
-    assert plugins.compressor is None
+    for plugin in (plugins.rules, plugins.doctor, plugins.extraction, plugins.compressor):
+        assert plugin is None or callable(plugin)

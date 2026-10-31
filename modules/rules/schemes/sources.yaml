@@ -1,0 +1,34 @@
+# Which schemes the rule engine knows, and the official pages their rules come from.
+# portal_id: nsp = National Scholarship Portal (scholarships.gov.in);
+#            tn_scholarship = Tamil Nadu state scholarship portal (TODO(satyajit): confirm URL, likely umis.tn.gov.in).
+- scheme_id: central-sector-scholarship
+  name: Central Sector Scheme of Scholarships for College and University Students
+  portal_id: nsp
+  urls:
+    - https://www.myscheme.gov.in/schemes/csss
+- scheme_id: aicte-pragati-degree
+  name: AICTE Pragati Scholarship Scheme for Girl Students (Technical Degree)
+  portal_id: nsp
+  urls:
+    - https://www.myscheme.gov.in/schemes/psgs-deg
+- scheme_id: aicte-saksham-degree
+  name: AICTE Saksham Scholarship Scheme for Specially-Abled Students (Degree)
+  portal_id: nsp
+  urls:
+    - https://www.myscheme.gov.in/schemes/sak-deg
+- scheme_id: post-matric-sc
+  name: Post Matric Scholarship for Scheduled Caste Students
+  portal_id: tn_scholarship
+  urls:
+    - https://www.myscheme.gov.in/schemes/pmssc
+- scheme_id: pudhumai-penn
+  name: Moovalur Ramamirtham Ammaiyar Higher Education Assurance Scheme (Pudhumai Penn)
+  portal_id: tn_scholarship
+  urls:
+    - https://www.myscheme.gov.in/schemes/pudhumai-penn-scheme
+- scheme_id: tn-postmatric-bc-mbc-dnc
+  name: Tamil Nadu Post Matric Scholarship for BC, MBC and DNC Students
+  portal_id: tn_scholarship
+  urls:
+    - https://www.myscheme.gov.in/schemes/pmstn
+    - https://bcmbcmw.tn.gov.in/welfschemes.htm

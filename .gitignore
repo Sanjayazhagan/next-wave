@@ -4,3 +4,9 @@ __pycache__/
 .pytest_cache/
 *.pyc
 data/
+# Remote modules: real documents, logs and scratch files never go in the public repo.
+fixtures/
+logs/
+work/
+media/
+reports/*.json

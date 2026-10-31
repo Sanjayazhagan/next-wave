@@ -1,0 +1,12 @@
+{
+  "portal_id": "mock-scholarship",
+  "name": "Student Aid Service Portal (fictional demo portal, browser worker)",
+  "documents": [
+    {
+      "doc_type": "*",
+      "accepted_types": ["pdf"],
+      "max_kb": 1024,
+      "source_note": "feat/browser-product: browser/adapters.py upload {'mime': 'application/pdf', 'max_bytes': 1048576}; server/app.py rejects non-PDF or > 1048576 bytes. Demo limit only, not a government portal."
+    }
+  ]
+}

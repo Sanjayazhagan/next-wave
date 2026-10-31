@@ -1,0 +1,9 @@
+{
+  "fields": {
+    "state": {"value": "Tamil Nadu", "source_document": "user_answer", "confidence": 1.0},
+    "gender": {"value": "female", "source_document": "user_answer", "confidence": 1.0},
+    "annual_income": {"value": "240000", "source_document": "user_answer", "confidence": 1.0},
+    "community": {"value": "MBC", "source_document": "user_answer", "confidence": 1.0},
+    "course": {"value": "B.E. first year", "source_document": "user_answer", "confidence": 1.0}
+  }
+}
