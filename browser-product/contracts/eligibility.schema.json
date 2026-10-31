@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Eligibility check input/output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "profile",
+    "schemes"
+  ],
+  "properties": {
+    "profile": {
+      "$ref": "profile.schema.json"
+    },
+    "schemes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "scheme_id",
+          "eligible",
+          "cited_clauses"
+        ],
+        "properties": {
+          "scheme_id": {
+            "type": "string"
+          },
+          "eligible": {
+            "type": "boolean"
+          },
+          "amount": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "deadline": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cited_clauses": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                },
+                "clause": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "consumer_id": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Consumer Id",
+      "type": "string"
+    },
+    "lease_token": {
+      "maxLength": 100,
+      "minLength": 20,
+      "title": "Lease Token",
+      "type": "string"
+    },
+    "provider_message_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Provider Message Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "consumer_id",
+    "lease_token",
+    "provider_message_id"
+  ],
+  "title": "DeliveryAck",
+  "type": "object"
+}

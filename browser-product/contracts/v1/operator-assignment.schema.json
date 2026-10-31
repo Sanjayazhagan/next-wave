@@ -1,0 +1,23 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "subject": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Subject",
+      "type": "string"
+    },
+    "ttl_seconds": {
+      "default": 600,
+      "maximum": 3600,
+      "minimum": 30,
+      "title": "Ttl Seconds",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "subject"
+  ],
+  "title": "Assignment",
+  "type": "object"
+}

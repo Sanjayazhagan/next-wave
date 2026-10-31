@@ -1,0 +1,21 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "ttl_seconds": {
+      "default": 300,
+      "maximum": 600,
+      "minimum": 30,
+      "title": "Ttl Seconds",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "session_id"
+  ],
+  "title": "TaskRequest",
+  "type": "object"
+}

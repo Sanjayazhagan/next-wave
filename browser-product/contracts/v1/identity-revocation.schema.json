@@ -1,0 +1,16 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "subject": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Subject",
+      "type": "string"
+    }
+  },
+  "required": [
+    "subject"
+  ],
+  "title": "Revocation",
+  "type": "object"
+}

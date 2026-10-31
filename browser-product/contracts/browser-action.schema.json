@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Safe semantic browser action",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind"
+  ],
+  "properties": {
+    "kind": {
+      "enum": [
+        "fill",
+        "click",
+        "wait",
+        "snapshot"
+      ]
+    },
+    "strategy": {
+      "enum": [
+        "label",
+        "role_button"
+      ]
+    },
+    "target": {
+      "type": "string"
+    },
+    "value": {
+      "type": "string"
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 15000
+    }
+  }
+}

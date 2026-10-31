@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Named chaos injection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "script_name"
+  ],
+  "properties": {
+    "script_name": {
+      "enum": [
+        "rename_income",
+        "popup",
+        "expire_session",
+        "server_failure",
+        "hide_income",
+        "move_button"
+      ]
+    },
+    "options": {
+      "type": "object"
+    }
+  }
+}

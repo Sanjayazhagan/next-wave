@@ -1,0 +1,16 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "invitation": {
+      "maxLength": 150,
+      "minLength": 20,
+      "title": "Invitation",
+      "type": "string"
+    }
+  },
+  "required": [
+    "invitation"
+  ],
+  "title": "Claim",
+  "type": "object"
+}

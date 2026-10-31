@@ -1,0 +1,87 @@
+{
+  "$defs": {
+    "VerifiedField": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        },
+        "source_ref": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Source Ref",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "verified": {
+          "title": "Verified",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value",
+        "source_ref",
+        "confidence",
+        "verified"
+      ],
+      "title": "VerifiedField",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "request_id": {
+      "maxLength": 100,
+      "minLength": 8,
+      "title": "Request Id",
+      "type": "string"
+    },
+    "subject": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Subject",
+      "type": "string"
+    },
+    "consent_ref": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Consent Ref",
+      "type": "string"
+    },
+    "portal": {
+      "const": "mock-scholarship",
+      "default": "mock-scholarship",
+      "title": "Portal",
+      "type": "string"
+    },
+    "mode": {
+      "const": "demo",
+      "default": "demo",
+      "title": "Mode",
+      "type": "string"
+    },
+    "fields": {
+      "additionalProperties": {
+        "$ref": "#/$defs/VerifiedField"
+      },
+      "title": "Fields",
+      "type": "object"
+    }
+  },
+  "required": [
+    "request_id",
+    "subject",
+    "consent_ref",
+    "fields"
+  ],
+  "title": "BrowserStart",
+  "type": "object"
+}

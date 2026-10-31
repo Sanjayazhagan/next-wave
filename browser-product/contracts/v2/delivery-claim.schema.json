@@ -1,0 +1,16 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "consumer_id": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Consumer Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "consumer_id"
+  ],
+  "title": "DeliveryClaim",
+  "type": "object"
+}

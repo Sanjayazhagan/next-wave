@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Future encrypted vault contract (NOT implemented in demo)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "operation",
+    "user_id",
+    "item_type"
+  ],
+  "properties": {
+    "operation": {
+      "enum": [
+        "read",
+        "write",
+        "delete"
+      ]
+    },
+    "user_id": {
+      "type": "string"
+    },
+    "item_type": {
+      "enum": [
+        "portal_id",
+        "receipt"
+      ]
+    },
+    "ciphertext_ref": {
+      "type": "string"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agent event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "session_id",
+    "event_type",
+    "timestamp",
+    "summary"
+  ],
+  "properties": {
+    "session_id": {
+      "type": "string"
+    },
+    "event_id": {
+      "type": "string"
+    },
+    "event_type": {
+      "enum": [
+        "step_started",
+        "otp_needed",
+        "captcha_needed",
+        "approval_needed",
+        "field_filled",
+        "repair_attempted",
+        "human_takeover",
+        "done",
+        "error",
+        "status_changed"
+      ]
+    },
+    "step": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "data": {
+      "type": "object"
+    }
+  }
+}

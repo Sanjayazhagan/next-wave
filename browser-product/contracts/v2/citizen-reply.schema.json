@@ -1,0 +1,76 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "response_id": {
+      "maxLength": 100,
+      "minLength": 8,
+      "title": "Response Id",
+      "type": "string"
+    },
+    "subject": {
+      "title": "Subject",
+      "type": "string"
+    },
+    "generation": {
+      "title": "Generation",
+      "type": "string"
+    },
+    "values": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Values",
+      "type": "object"
+    },
+    "secret": {
+      "anyOf": [
+        {
+          "maxLength": 32,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Secret"
+    },
+    "decision": {
+      "anyOf": [
+        {
+          "enum": [
+            "approve",
+            "edit",
+            "reject"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Decision"
+    },
+    "review_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Review Hash"
+    }
+  },
+  "required": [
+    "response_id",
+    "subject",
+    "generation"
+  ],
+  "title": "CitizenReply",
+  "type": "object"
+}

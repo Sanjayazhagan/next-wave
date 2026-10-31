@@ -1,0 +1,130 @@
+{
+  "$defs": {
+    "Question": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_]{0,49}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "kind": {
+          "default": "text",
+          "enum": [
+            "text",
+            "number",
+            "date",
+            "choice",
+            "artifact"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "choices": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Choices",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "label"
+      ],
+      "title": "Question",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "request_id": {
+      "maxLength": 100,
+      "minLength": 8,
+      "title": "Request Id",
+      "type": "string"
+    },
+    "context_id": {
+      "title": "Context Id",
+      "type": "string"
+    },
+    "generation": {
+      "title": "Generation",
+      "type": "string"
+    },
+    "subject": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Subject",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "information",
+        "otp",
+        "captcha",
+        "device_auth",
+        "approval",
+        "helper"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "prompt": {
+      "maxLength": 1500,
+      "minLength": 1,
+      "title": "Prompt",
+      "type": "string"
+    },
+    "fields": {
+      "items": {
+        "$ref": "#/$defs/Question"
+      },
+      "maxItems": 30,
+      "title": "Fields",
+      "type": "array"
+    },
+    "review_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[a-f0-9]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Review Hash"
+    },
+    "ttl_seconds": {
+      "default": 600,
+      "maximum": 1800,
+      "minimum": 30,
+      "title": "Ttl Seconds",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "request_id",
+    "context_id",
+    "generation",
+    "subject",
+    "kind",
+    "prompt"
+  ],
+  "title": "Interrupt",
+  "type": "object"
+}
