@@ -84,3 +84,23 @@ def test_profile_only_holds_core_field_names(tmp_path, monkeypatch):
     profile = merge_profile([contract])
     assert set(profile.fields) <= PROFILE_FIELDS and profile.fields["date_of_birth"].value == "23-07-2006"
     assert "certificate_number" in contract.fields and "qr_status" in contract.fields
+
+
+def test_the_blurred_working_copy_is_deleted_after_reading(monkeypatch, tmp_path) -> None:
+    import modules.extraction as extraction
+    from contracts.documents import DocumentImage
+    from modules.extraction.models import DocResult, Quality
+
+    copy = tmp_path / "copy.jpg"
+    copy.write_bytes(b"blurred")
+    result = DocResult(
+        doc_id="d", doc_type="other", fields={}, page_count=1,
+        quality=Quality(
+            blur_score=100.0, brightness=120.0, skew_deg=0.0, too_blurry=False, too_dark=False
+        ),
+        masked_ref=str(copy), seconds=0.1,
+    )
+    monkeypatch.setattr(extraction.preprocess, "load_pages", lambda data, mime: [object()])
+    monkeypatch.setattr(extraction, "extract_pages", lambda pages: result)
+    extraction.extract_sync([DocumentImage(file_ref="a" * 32, mime_type="image/jpeg", data=b"x")])
+    assert not copy.exists()

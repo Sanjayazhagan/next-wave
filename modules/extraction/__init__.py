@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 
 from contracts.documents import DocumentImage, ExtractedDocument, ExtractionResult
 
@@ -27,6 +28,9 @@ def extract_sync(images: list[DocumentImage]) -> ExtractionResult:
         try:
             pages = preprocess.load_pages(image.data, image.mime_type)
             result = extract_pages(pages)
+            # The blurred copy is a working file, and nothing reads it after this.
+            if result.masked_ref:
+                Path(result.masked_ref).unlink(missing_ok=True)
         except Exception as exc:
             # One unreadable upload must not stop the run; the questions cover the gap.
             log.warning("Extraction failed for one document: %s", type(exc).__name__)

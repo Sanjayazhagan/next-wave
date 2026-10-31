@@ -40,16 +40,21 @@ WhatsApp.</li>
 your state, course, income and community, so the assistant can reply. ID numbers,
 phone numbers and email addresses are masked first. Some providers may keep or learn
 from this text, so please do not share anything you want kept private in the chat.</li>
+<li>AI model providers also receive photos of the documents you send, so details can be
+read from them. We blur Aadhaar and bank numbers first, but this depends on our software
+finding them, so a number could be missed. Names, income, community and other printed
+details are not blurred.</li>
 <li>AI model providers also receive page structure and field names to plan each portal
 step. They do not receive the personal values typed into portals. OTPs, CAPTCHA
-answers, passwords, portal logins and documents are never sent to them.</li>
+answers, passwords and portal logins are never sent to them.</li>
 <li>Translation and speech providers process voice notes and text in your language.</li>
 <li>Government portals receive the details you approve for your application.</li>
 </ul>
 
 <h2>How we protect it</h2>
 <p>Documents, portal IDs, receipts and saved session data are encrypted when stored.
-Message text is not written to our logs.</p>
+The blurred working copy of a document is deleted as soon as it has been read. Message
+text is not written to our logs.</p>
 
 <h2>Your choices</h2>
 <p>Reply STOP at any time to end a session. To have your data deleted, send us a

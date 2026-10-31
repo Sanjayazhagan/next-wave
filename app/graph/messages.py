@@ -38,14 +38,16 @@ LANGUAGE_WORDS = {
     "oriya": "or",
 }
 
-CONSENT_VERSION = "2026-10-31c"
+CONSENT_VERSION = "2026-10-31d"
 CONSENT = (
     "Vanakkam! I'm Dakiya. I can find government schemes for you and apply for them.\n\n"
     "To do this I will chat with you, read the documents you send, fill the portal form "
     "for you, and show you everything before anything is submitted.\n\n"
     "Our chat, including details like your course, income and community, is handled by "
-    "AI providers. Your OTPs, passwords, documents, Aadhaar and bank numbers are not "
-    "sent to them. Please don't type those numbers into the chat.\n\n"
+    "AI providers. So are photos of your documents. We blur Aadhaar and bank numbers "
+    "first, but names, income and community can still be read, and a number we miss "
+    "could be too. Your OTPs and passwords are never sent to them. Please don't type "
+    "Aadhaar or bank numbers into the chat.\n\n"
     "Reply STOP at any time to end, or /start to begin again.\n\nDo you agree?"
 )
 DECLINED = "No problem. Nothing was saved. Message me any time to start again."
