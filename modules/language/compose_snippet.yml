@@ -1,0 +1,10 @@
+# Paste under `services:` in the main compose file, then set
+# LANGUAGE_SERVICE_URL=http://language:8081 for the core API.
+  language:
+    build:
+      context: .
+      dockerfile: modules/language/Dockerfile
+    env_file: .env
+    ports:
+      - "8081:8081"
+    restart: unless-stopped

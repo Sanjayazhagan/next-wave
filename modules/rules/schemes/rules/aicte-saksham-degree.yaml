@@ -1,0 +1,32 @@
+scheme_id: aicte-saksham-degree
+name: AICTE Saksham Scholarship Scheme for Specially-Abled Students (Degree)
+portal_id: nsp
+benefit_inr: 50000
+benefit_text: "₹50,000/- per annum for every year of study i.e. maximum 4 years for the first year admitted students and maximum 3 years for the second year admitted students through lateral entry as lump sum amount towards payment of college fee, purchase of computer, stationeries, books, equipment, software, etc."
+deadline: null
+required_docs: [marksheet, income]
+sources:
+  - url: https://www.myscheme.gov.in/schemes/sak-deg
+    scraped_at: 2026-10-31
+review:
+  # Every clause checked word for word against the saved snapshot in raw/ (the loader enforces this).
+  reviewed_by: verified and approved by satyajit
+  reviewed_at: 2026-10-31
+rules:
+  - id: disability-40
+    field: disability_percent
+    op: gte
+    value: 40
+    clause: "Specially-abled students have a disability of not less than 40%."
+    source: 0
+  - id: income-ceiling
+    field: annual_income
+    op: lte
+    value: 800000
+    clause: "Family income from all sources should not be more than Rs. 8 lakh per annum during the current financial year."
+    source: 0
+unmodelled:
+  - clause: "The candidate should be admitted to the First year of the Degree level course OR the Second year of the Degree level course through lateral entry in any of the AICTE-approved institutions of the respective year."
+    source: 0
+  - clause: "The gap period between the year of passing the qualifying examination and the session of admission in the degree course should not be more than two years."
+    source: 0

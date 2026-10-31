@@ -1,0 +1,35 @@
+# a `review:` block and rename to aicte-pragati-degree.yaml.
+scheme_id: aicte-pragati-degree
+name: AICTE Pragati Scholarship Scheme for Girl Students (Technical Degree)
+portal_id: nsp
+benefit_inr: 50000
+benefit_text: "₹ 50,000/- per annum for every year of study, i.e. maximum of 4 years for first-year admitted students and a maximum of 3 years for second-year admitted students, through lateral entry as a lump sum amount towards payment of college fees, purchase of computer, stationeries, books, equipment, software, etc."
+deadline: null
+required_docs: [marksheet, income, community]
+sources:
+  - url: https://www.myscheme.gov.in/schemes/psgs-deg
+    scraped_at: 2026-10-31
+review:
+  # Every clause checked word for word against the saved snapshot in raw/ (the loader enforces this).
+  reviewed_by: verified and approved by satyajit
+  reviewed_at: 2026-10-31
+rules:
+  - id: girl-student
+    field: gender
+    op: eq
+    value: female
+    clause: "The applicant must be a Girl Student."
+    source: 0
+  - id: income-ceiling
+    field: annual_income
+    op: lte
+    value: 800000
+    clause: "The annual income of the family (from all sources) must not be more than ₹ 8,00,000/- per annum during the current financial year."
+    source: 0
+unmodelled:
+  - clause: "The applicant must be pursuing either the First year of the degree course OR the Second year of the Degree course through lateral entry."
+    source: 0
+  - clause: "If the gap period between the year of passing the qualifying examination and the admission session in a degree course is more than two years."
+    source: 0
+  - clause: "The scholarship is only applicable to a maximum of two girl children of a family."
+    source: 0

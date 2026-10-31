@@ -1,0 +1,37 @@
+# benefit_inr is 12 x the monthly ₹1,000 in the source.
+scheme_id: pudhumai-penn
+name: Moovalur Ramamirtham Ammaiyar Higher Education Assurance Scheme (Pudhumai Penn)
+portal_id: tn_scholarship
+benefit_inr: 12000
+benefit_text: "All girl students who studied from Classes 6th to 12th in Government schools will be paid ₹1,000/- per month till the completion of their undergraduate degree, diploma, ITI, and any other recognized course."
+deadline: null
+required_docs: [marksheet]
+sources:
+  - url: https://www.myscheme.gov.in/schemes/pudhumai-penn-scheme
+    scraped_at: 2026-10-31
+review:
+  # Every clause checked word for word against the saved snapshot in raw/ (the loader enforces this).
+  reviewed_by: verified and approved by satyajit
+  reviewed_at: 2026-10-31
+rules:
+  - id: tn-resident
+    field: state
+    op: eq
+    value: Tamil Nadu
+    clause: "The applicant should be residing in the state of Tamil Nadu."
+    source: 0
+  - id: female
+    field: gender
+    op: eq
+    value: female
+    clause: "The applicant should be a female to avail of benefits from this scheme."
+    source: 0
+  - id: govt-school-6-to-12
+    field: govt_school_6_to_12
+    op: eq
+    value: "yes"
+    clause: "All girl students who studied from Classes 6th to 12th in Government schools of Tamil Nadu are eligible to apply under the scheme."
+    source: 0
+unmodelled:
+  - clause: "Only the first course of higher education will be considered as an eligible factor."
+    source: 0

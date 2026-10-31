@@ -369,9 +369,8 @@ def test_hanging_module_times_out() -> None:
         asyncio.run(call(hangs, timeout=0.05))
 
 
-def test_missing_modules_load_as_none() -> None:
+def test_modules_load_as_callable_or_none() -> None:
+    # The remote modules are merged one by one; each is either missing or callable.
     plugins = load_plugins()
-    assert plugins.rules is None
-    assert plugins.doctor is None
-    assert plugins.extraction is None
-    assert plugins.compressor is None
+    for plugin in (plugins.rules, plugins.doctor, plugins.extraction, plugins.compressor):
+        assert plugin is None or callable(plugin)
