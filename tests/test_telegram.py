@@ -45,15 +45,19 @@ class TelegramChat:
         sizes = [{"file_id": "small"}, {"file_id": "large"}]
         return self.message(photo=sizes)
 
-    def up_to_review(self) -> None:
+    def up_to_documents(self) -> None:
         self.text("/start")
         self.press("consent:yes")
-        self.photo()
-        self.press("documents:done")
         self.text("Tamil Nadu")
         self.text("Class 12")
         self.text("120000")
         self.press("question_community:bc")
+        self.press("confirm:yes")
+
+    def up_to_review(self) -> None:
+        self.up_to_documents()
+        self.photo()
+        self.press("documents:done")
         self.text("portal-user")
         self.text("123456")
         self.text("ABCD")
@@ -117,26 +121,23 @@ def test_full_run_stops_at_review_without_submitting(
 def test_photo_is_downloaded_at_full_size_and_stored_encrypted(
     chat: TelegramChat, telegram_client: TestClient, network: Network, tmp_path
 ) -> None:
-    chat.text("/start")
-    chat.press("consent:yes")
+    chat.up_to_documents()
     chat.photo()
 
     assert network.telegram_calls("getFile")[-1] == {"file_id": "large"}
-    assert "(1 received)" in network.telegram_texts()[-1]
+    assert "Got it" in network.telegram_texts()[-1]
     stored = b"".join(p.read_bytes() for p in tmp_path.rglob("*") if p.is_file())
     assert b"telegram-file-bytes" not in stored
 
 
 def test_pdf_document_is_accepted(chat: TelegramChat, network: Network) -> None:
-    chat.text("/start")
-    chat.press("consent:yes")
+    chat.up_to_documents()
     chat.message(document={"file_id": "doc1", "mime_type": "application/pdf"})
-    assert "(1 received)" in network.telegram_texts()[-1]
+    assert "Got it" in network.telegram_texts()[-1]
 
 
 def test_other_file_types_are_refused(chat: TelegramChat, network: Network) -> None:
-    chat.text("/start")
-    chat.press("consent:yes")
+    chat.up_to_documents()
     chat.message(document={"file_id": "doc1", "mime_type": "application/zip"})
     assert "photo or a PDF" in network.telegram_texts()[-1]
 
@@ -159,18 +160,18 @@ def test_group_chats_are_ignored(chat: TelegramChat, network: Network) -> None:
     assert network.telegram == []
 
 
-def test_start_command_does_not_answer_a_pending_question(
-    chat: TelegramChat, network: Network
+def test_start_command_begins_again(
+    chat: TelegramChat, telegram_client: TestClient, network: Network
 ) -> None:
-    chat.text("/start")
-    chat.press("consent:yes")
-    chat.photo()
-    chat.press("documents:done")
-    count = len(network.telegram_texts())
+    chat.up_to_documents()
+    first = telegram_client.app.state.sessions.active_for_phone(USER_ID)
 
     chat.text("/start")
 
-    assert len(network.telegram_texts()) == count
+    second = telegram_client.app.state.sessions.active_for_phone(USER_ID)
+    assert second.id != first.id
+    assert second.pending_kind == "consent"
+    assert "Do you agree?" in network.telegram_texts()[-1]
 
 
 @pytest.mark.parametrize("word", ["STOP", "/stop"])

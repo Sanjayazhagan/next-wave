@@ -8,13 +8,24 @@ class AgentState(TypedDict, total=False):
     owner: str  # Phone number, or the session id for web-only sessions.
 
     # User loop
+    language: str | None
     consent: dict[str, Any] | None
     file_refs: list[dict[str, str]]
     documents_done: bool
+    documents_needed: bool
     documents: list[dict[str, Any]]
     profile: dict[str, Any]
     answered: list[str]
     questions_done: bool
+    details_choice: str | None
+    fix_error: bool
+
+    # AI chat, with ID-shaped text masked
+    chat: list[dict[str, str]]
+    chat_reply: str | None
+    chat_turns: int
+    intake_route: str
+    documents_intro: str | None
 
     # Scheme
     schemes: list[dict[str, Any]]

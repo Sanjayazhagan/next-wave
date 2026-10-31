@@ -24,6 +24,10 @@ EVENT_FOR_KIND: dict[str, EventType] = {
     "approval": "approval_needed",
     "handover": "handover_needed",
 }
+HIDDEN_FROM_LOG = {
+    "approval": "Review ready for approval",
+    "chat": "Chat message sent",
+}
 BUSY_TEXT = "I'm still working on the last step. I'll message you when I need you."
 HELPER_TEXT = "A helper is working on your application. I'll message you when it's done."
 OLD_BUTTON_TEXT = "That button is from an earlier message. Please use the latest one."
@@ -217,9 +221,9 @@ class SessionManager:
     async def _pause(self, session_id: str, prompt: dict[str, Any]) -> None:
         kind = prompt["kind"]
         self._store.set_status(session_id, "paused", kind)
-        # The review text holds personal details, and this log is not encrypted.
-        # The web app reads it from GET /session/{id} instead.
-        message = "Review ready for approval" if kind == "approval" else prompt["text"]
+        # These can repeat personal details, and this log is not encrypted.
+        # The web app reads them from GET /session/{id} instead.
+        message = HIDDEN_FROM_LOG.get(kind, prompt["text"])
         self._events.emit(
             session_id,
             EVENT_FOR_KIND.get(kind, "question_needed"),

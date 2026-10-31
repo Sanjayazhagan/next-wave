@@ -8,10 +8,22 @@ from app.config import Settings
 
 MAX_TEXT_LENGTH = 4000
 MAX_BUTTON_ID_BYTES = 64
+MAX_SINGLE_COLUMN_BUTTONS = 4
 
 
 class TelegramError(ChannelError):
     """Telegram refused a request. Holds Telegram's message, never the token."""
+
+
+def _keyboard(buttons: dict[str, str]) -> list[list[dict[str, str]]]:
+    """One button per row, or two per row for a long list such as languages."""
+    keys = [
+        {"text": title, "callback_data": id_}
+        for id_, title in buttons.items()
+        if len(id_.encode()) <= MAX_BUTTON_ID_BYTES
+    ]
+    width = 2 if len(keys) > MAX_SINGLE_COLUMN_BUTTONS else 1
+    return [keys[start : start + width] for start in range(0, len(keys), width)]
 
 
 class TelegramClient:
@@ -64,13 +76,7 @@ class TelegramClient:
             json={
                 "chat_id": chat_id,
                 "text": text[:MAX_TEXT_LENGTH],
-                "reply_markup": {
-                    "inline_keyboard": [
-                        [{"text": title, "callback_data": id_}]
-                        for id_, title in buttons.items()
-                        if len(id_.encode()) <= MAX_BUTTON_ID_BYTES
-                    ]
-                },
+                "reply_markup": {"inline_keyboard": _keyboard(buttons)},
             },
         )
 
@@ -88,6 +94,10 @@ class TelegramClient:
             data={"chat_id": chat_id},
             files={"voice": ("receipt.ogg", data, "audio/ogg")},
         )
+
+    async def send_typing(self, chat_id: str) -> None:
+        """Show "typing..." while the bot works. Telegram clears it after 5 seconds."""
+        await self._call("sendChatAction", json={"chat_id": chat_id, "action": "typing"})
 
     async def answer_button(self, callback_id: str) -> None:
         """Stop the spinner Telegram shows on a pressed button."""

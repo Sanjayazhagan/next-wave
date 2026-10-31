@@ -36,7 +36,8 @@ class Settings(BaseSettings):
     llm_model: str = "auto"
 
     language_service_url: str = ""
-    default_language: str = "ta"
+    default_language: str = "en"
+    choose_language: bool = True  # Ask for a language before anything else.
     browser_worker_url: str = ""
 
     # Runs a fake portal and fake extraction, so the loop can be tried end to end.

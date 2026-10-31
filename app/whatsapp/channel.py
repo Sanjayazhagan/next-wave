@@ -4,9 +4,9 @@ from typing import Any
 
 import httpx
 
-from app.conversation import ENGLISH
 from app.language import LanguageError, LanguageService, to_voice_note
 from app.sessions import Session
+from app.translations import localize
 from app.vault import FileStore
 from app.whatsapp.client import WhatsAppClient, WhatsAppError
 
@@ -25,7 +25,7 @@ class WhatsAppChannel:
         self._files = files
 
     async def _localize(self, session: Session, text: str) -> str:
-        return await self._language.translate(text, ENGLISH, session.language)
+        return await localize(text, session.language, self._language)
 
     async def deliver(self, session: Session, prompt: dict[str, Any]) -> None:
         if not session.phone:
@@ -38,7 +38,9 @@ class WhatsAppChannel:
     async def _deliver(self, session: Session, prompt: dict[str, Any]) -> None:
         if prompt.get("image_ref"):
             await self._send_image(session.phone, prompt["image_ref"])
-        text = await self._localize(session, prompt["text"])
+        text = prompt["text"]
+        if not prompt.get("localized"):
+            text = await self._localize(session, text)
         buttons = prompt.get("buttons")
         if not buttons:
             await self._client.send_text(session.phone, text)

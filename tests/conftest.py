@@ -48,10 +48,19 @@ class FakeLlm:
 
     def __init__(self) -> None:
         self.prompts: list[str] = []
+        self.chat_prompts: list[str] = []
+        # Replies for the AI chat. When empty it fails, so the fixed questions run.
+        self.chat_replies: list[Any] = []
         self.press_final_submit = False
 
     def __call__(self, body: dict[str, Any]) -> str:
         system, user = (message["content"] for message in body["messages"])
+        if "You are Dakiya" in system:
+            self.chat_prompts.append(user)
+            if not self.chat_replies:
+                return "not json"
+            reply = self.chat_replies.pop(0)
+            return reply if isinstance(reply, str) else json.dumps(reply, ensure_ascii=False)
         self.prompts.append(system + "\n" + user)
         nodes = [json.loads(line) for line in user.splitlines() if line.startswith("{")]
         if "saved step" in system:
@@ -132,8 +141,9 @@ class Network:
         if "api.telegram.org" in url:
             return self._telegram(request)
         if url.startswith(LLM_URL):
-            self.llm_calls += 1
+            before = len(self.llm.prompts)
             reply = self.llm(json.loads(request.content))
+            self.llm_calls += len(self.llm.prompts) - before  # Portal planning only.
             return httpx.Response(200, json={"choices": [{"message": {"content": reply}}]})
         if url.startswith(LANGUAGE_URL):
             return self._language(request)
@@ -228,16 +238,20 @@ class Chat:
         audio = {"id": "aud1", "mime_type": "audio/ogg; codecs=opus", "voice": True}
         return self.message("audio", audio=audio)
 
-    def up_to_login(self) -> None:
-        """Consent, one document, and the four questions."""
+    def up_to_documents(self) -> None:
+        """Consent and the four questions."""
         self.text("hi")
         self.press("consent:yes")
-        self.photo()
-        self.press("documents:done")
         self.text("Tamil Nadu")
         self.text("Class 12")
         self.text("120000")
         self.press("question_community:bc")
+        self.press("confirm:yes")
+
+    def up_to_login(self) -> None:
+        self.up_to_documents()
+        self.photo()
+        self.press("documents:done")
 
     def up_to_review(self) -> None:
         self.up_to_login()
@@ -283,6 +297,7 @@ def make_settings(tmp_path: Path):
             "files_path": tmp_path / "files",
             "llm_base_url": LLM_URL,
             "default_portal_id": "demo_portal",
+            "choose_language": False,  # test_languages.py covers this step.
             **overrides,
         }
         return Settings(_env_file=None, **values)

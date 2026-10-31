@@ -20,8 +20,9 @@ FILE_FAILED_TEXT = "I couldn't get that file. Please send it again."
 VOICE_UNAVAILABLE_TEXT = "I can't listen to voice notes yet. Please type your reply."
 VOICE_FAILED_TEXT = "I couldn't understand that voice note. Please try again or type it."
 UNSUPPORTED_TEXT = "I can't read that kind of message. Please type your reply."
-# Exact answers: translating these would corrupt the digits or letters.
-NO_TRANSLATE_KINDS = ("otp", "captcha", "edit")
+# Exact answers would be corrupted by translating them, and the AI chat reads the
+# user's own language directly.
+NO_TRANSLATE_KINDS = ("otp", "captcha", "edit", "fix", "chat")
 
 
 class Downloader(Protocol):

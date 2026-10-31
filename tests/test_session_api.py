@@ -32,6 +32,11 @@ def test_web_session_runs_the_same_loop(client: TestClient, network: Network) ->
     assert view["prompt"]["kind"] == "consent"
 
     reply(client, sid, button="consent:yes")
+    reply(client, sid, text="Tamil Nadu")
+    reply(client, sid, text="Class 12")
+    reply(client, sid, text="120000")
+    reply(client, sid, button="question_community:bc")
+    reply(client, sid, button="confirm:yes")
     upload = client.post(
         f"/session/{sid}/files",
         files={"file": ("mark.jpg", b"image-bytes", "image/jpeg")},
@@ -39,10 +44,6 @@ def test_web_session_runs_the_same_loop(client: TestClient, network: Network) ->
     )
     assert upload.status_code == 202
     reply(client, sid, button="documents:done")
-    reply(client, sid, text="Tamil Nadu")
-    reply(client, sid, text="Class 12")
-    reply(client, sid, text="120000")
-    reply(client, sid, button="question_community:bc")
     reply(client, sid, text="portal-user")
     reply(client, sid, text="123456")
     reply(client, sid, text="ABCD")

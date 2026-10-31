@@ -11,6 +11,7 @@ from langgraph.checkpoint.serde.encrypted import EncryptedSerializer
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from app.api import router as session_router
+from app.assistant import Assistant
 from app.browser import BrowserWorker, HttpBrowserWorker
 from app.channels import ChannelError, RoutedChannel
 from app.config import Settings
@@ -86,13 +87,15 @@ def create_app(
         )
         await checkpointer.setup()
 
+        llm = ChatLlm(settings, client)
         deps = Deps(
             settings=settings,
             browser=worker,
             vault=vault,
             files=files,
             skills=skills,
-            planner=Planner(ChatLlm(settings, client), settings.final_submit_pattern),
+            planner=Planner(llm, settings.final_submit_pattern),
+            assistant=Assistant(llm),
             plugins=loaded,
             events=events,
             sessions=sessions,

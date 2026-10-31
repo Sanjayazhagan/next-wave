@@ -4,6 +4,7 @@ LangGraph reruns a node from the top when it resumes, so anything with a side
 effect goes after the node's interrupt, or in a separate node.
 """
 import base64
+import logging
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -11,6 +12,7 @@ from typing import Any
 
 from langgraph.types import interrupt
 
+from app.assistant import Assistant, clean_answer
 from app.browser import BrowserError, BrowserSessionLost, BrowserWorker
 from app.config import Settings
 from app.events import EventLog
@@ -19,7 +21,7 @@ from app.graph.state import AgentState
 from app.llm import LlmError
 from app.planner import Planner, PlanError
 from app.plugins import Plugins, call
-from app.redact import mask_for_display
+from app.redact import mask_for_display, redact
 from app.sessions import SessionStore
 from app.skills import SkillStep, SkillStore
 from app.vault import FileStore, Vault
@@ -30,10 +32,13 @@ from contracts.eligibility import EligibilityRequest
 from contracts.profile import Profile, ProfileField
 from contracts.vault import Receipt
 
+log = logging.getLogger(__name__)
+
 MAX_STRIKES = 3
 MAX_BUTTONS = 3
-YES_WORDS = {"yes", "y", "ok", "okay", "agree", "i agree", "ஆம்", "சரி"}
-NO_WORDS = {"no", "n", "disagree", "இல்லை"}
+MAX_CHAT_TURNS = 12  # Then the fixed questions finish the job.
+YES_WORDS = {"yes", "y", "ok", "okay", "agree", "i agree", "ஆம்", "சரி", "हाँ", "हां", "ठीक है"}
+NO_WORDS = {"no", "n", "disagree", "இல்லை", "नहीं"}
 
 
 @dataclass
@@ -44,6 +49,7 @@ class Deps:
     files: FileStore
     skills: SkillStore
     planner: Planner
+    assistant: Assistant
     plugins: Plugins
     events: EventLog
     sessions: SessionStore
@@ -54,9 +60,18 @@ def ask(
     text: str,
     buttons: dict[str, str] | None = None,
     image_ref: str | None = None,
+    localized: bool = False,
 ) -> dict[str, Any]:
-    """Pause the graph until the user replies. Button ids carry the prompt kind."""
-    prompt: dict[str, Any] = {"kind": kind, "text": text, "image_ref": image_ref}
+    """Pause the graph until the user replies. Button ids carry the prompt kind.
+
+    `localized` marks text already in the user's language, so it is not translated.
+    """
+    prompt: dict[str, Any] = {
+        "kind": kind,
+        "text": text,
+        "image_ref": image_ref,
+        "localized": localized,
+    }
     if buttons:
         prompt["buttons"] = {f"{kind}:{id_}": title for id_, title in buttons.items()}
     return interrupt(prompt)
@@ -79,6 +94,25 @@ def known_values(state: AgentState) -> dict[str, str]:
     return {name: f.value for name, f in profile_of(state).fields.items()}
 
 
+def indian_rupees(digits: str) -> str:
+    """Group as India writes it, so 120000 reads ₹1,20,000 and a slip is easy to see."""
+    head, tail = digits[:-3], digits[-3:]
+    groups = []
+    while head:
+        groups.insert(0, head[-2:])
+        head = head[:-2]
+    return "₹" + ",".join([*groups, tail])
+
+
+def display_answer(question: messages.Question, fields: dict[str, ProfileField]) -> str:
+    field = fields.get(question.field)
+    if field is None:
+        return "-"
+    if question.digits_only and field.value.isdigit():
+        return indian_rupees(field.value)
+    return field.value
+
+
 def with_answer(state: AgentState, field: str, value: str, source: str) -> dict[str, Any]:
     profile = profile_of(state)
     profile.fields[field] = ProfileField(value=value, source_document=source, confidence=1.0)
@@ -95,6 +129,15 @@ class Nodes:
         )
 
     # --- User loop ---
+
+    async def choose_language(self, state: AgentState) -> dict[str, Any]:
+        choices = messages.LANGUAGE_CHOICES
+        reply = ask("language", messages.CHOOSE_LANGUAGE, choices, localized=True)
+        choice = chosen(reply) or messages.LANGUAGE_WORDS.get(typed(reply).lower())
+        if choice not in choices:
+            return {}
+        self.d.sessions.set_language(state["session_id"], choice)
+        return {"language": choice}
 
     async def consent(self, state: AgentState) -> dict[str, Any]:
         reply = ask("consent", messages.CONSENT, {"yes": "I agree", "no": "No thanks"})
@@ -113,40 +156,129 @@ class Nodes:
             }
         return {}
 
+    async def confirm_details(self, state: AgentState) -> dict[str, Any]:
+        """The AI can misread an answer, so the user checks them before they are used."""
+        fields = profile_of(state).fields
+        lines = [
+            f"{number}. {question.label} {display_answer(question, fields)}"
+            for number, question in enumerate(messages.QUESTIONS, start=1)
+        ]
+        text = "\n\n".join(
+            [messages.CONFIRM_INTRO, "\n".join(lines), messages.CONFIRM_QUESTION]
+        )
+        reply = ask("confirm", text, {"yes": "Yes, correct", "change": "Change"})
+        answer = chosen(reply) or typed(reply).lower()
+        if answer == "yes" or answer in YES_WORDS:
+            return {"details_choice": "yes"}
+        return {"details_choice": "change" if answer == "change" else None}
+
+    async def fix_details(self, state: AgentState) -> dict[str, Any]:
+        text = messages.EDIT
+        if state.get("fix_error"):
+            text = f"{messages.EDIT_INVALID} {text}"
+        match = re.fullmatch(r"(\d+)[\s.:)-]+(.+)", typed(ask("fix", text)), re.DOTALL)
+        questions = messages.QUESTIONS
+        if match is None or not 1 <= int(match[1]) <= len(questions):
+            return {"fix_error": True}
+        question = questions[int(match[1]) - 1]
+        value = clean_answer(question, match[2], strict=True)
+        if value is None:
+            return {"fix_error": True}
+        return {
+            "fix_error": False,
+            "details_choice": None,
+            "profile": with_answer(state, question.field, value, "user_edit"),
+        }
+
     async def collect_documents(self, state: AgentState) -> dict[str, Any]:
         file_refs = state.get("file_refs", [])
-        text = f"{messages.DOCUMENTS} ({len(file_refs)} received)" if file_refs else messages.DOCUMENTS
-        reply = ask("documents", text, {"done": "Done"})
+        intro = None
+        if state.get("documents_needed"):
+            text = messages.DOCUMENTS_NEEDED
+        elif file_refs:
+            text = messages.DOCUMENT_RECEIVED
+        else:
+            intro = state.get("documents_intro")
+            text = intro or messages.DOCUMENTS
+        reply = ask("documents", text, {"done": "Done"}, localized=bool(intro))
         if reply.get("file_ref"):
             entry = {"file_ref": reply["file_ref"], "mime_type": reply.get("mime_type", "image/jpeg")}
-            return {"file_refs": [*file_refs, entry]}
-        if (chosen(reply) == "done" or typed(reply).lower() == "done") and file_refs:
-            return {"documents_done": True}
+            return {"file_refs": [*file_refs, entry], "documents_needed": False}
+        if chosen(reply) == "done" or typed(reply).lower() == "done":
+            if file_refs:
+                return {"documents_done": True}
+            return {"documents_needed": True}
         return {}
 
     async def extract_profile(self, state: AgentState) -> dict[str, Any]:
         extract = self.d.plugins.extraction
         if extract is None:
-            return {"profile": Profile().model_dump(), "documents": []}
+            return {"documents": []}
         self._emit(state, "extract_profile", "Reading your documents")
         images = []
         for entry in state["file_refs"]:
             data, mime_type = self.d.files.get(entry["file_ref"])
             images.append(DocumentImage(file_ref=entry["file_ref"], mime_type=mime_type, data=data))
         result = await call(extract, images)
+        # What the user told us stays. The doctor flags any clash with the documents.
+        profile = profile_of(state)
+        for name, field in result.profile.fields.items():
+            profile.fields.setdefault(name, field)
         return {
-            "profile": result.profile.model_dump(),
+            "profile": profile.model_dump(),
             "documents": [document.model_dump() for document in result.documents],
         }
 
-    async def ask_question(self, state: AgentState) -> dict[str, Any]:
+    async def intake_think(self, state: AgentState) -> dict[str, Any]:
+        """Ask the model what to say next. Separate from the wait for the user,
+        because a node reruns on resume and this must not call the model twice."""
+        answered = state.get("answered", [])
+        missing = [q for q in messages.QUESTIONS if q.field not in answered]
+        if not self.d.assistant.available or state.get("chat_turns", 0) >= MAX_CHAT_TURNS:
+            return {"intake_route": "fallback"}
+        language = messages.LANGUAGE_NAMES.get(state.get("language", ""), "English")
+        try:
+            turn = await self.d.assistant.next_turn(
+                state.get("chat", []), answered, missing, language
+            )
+        except LlmError as exc:
+            log.warning("AI chat fell back to fixed questions: %s", exc)
+            return {"intake_route": "fallback"}
+
         profile = profile_of(state)
+        for field, value in turn.fields.items():
+            profile.fields[field] = ProfileField(
+                value=value, source_document="user_answer", confidence=1.0
+            )
+        answered = [*answered, *turn.fields]
+        update: dict[str, Any] = {
+            "profile": profile.model_dump(),
+            "answered": answered,
+            "chat": [*state.get("chat", []), {"role": "assistant", "text": turn.reply}],
+        }
+        if all(q.field in answered for q in messages.QUESTIONS):
+            return {
+                **update,
+                "intake_route": "done",
+                "questions_done": True,
+                "documents_intro": turn.reply,
+            }
+        return {**update, "intake_route": "listen", "chat_reply": turn.reply}
+
+    async def intake_listen(self, state: AgentState) -> dict[str, Any]:
+        reply = ask("chat", state["chat_reply"], localized=True)
+        text = typed(reply)
+        if not text:
+            return {}
+        return {
+            "chat": [*state.get("chat", []), {"role": "user", "text": redact(text)}],
+            "chat_turns": state.get("chat_turns", 0) + 1,
+        }
+
+    async def ask_question(self, state: AgentState) -> dict[str, Any]:
         answered = state.get("answered", [])
         for question in messages.QUESTIONS:
             if question.field in answered:
-                continue
-            existing = profile.fields.get(question.field)
-            if existing and existing.confidence >= 0.9:
                 continue
             reply = ask(f"question_{question.field}", question.text, dict(question.choices) or None)
             value = dict(question.choices).get(chosen(reply) or "") or typed(reply)
@@ -170,7 +302,7 @@ class Nodes:
     async def choose_scheme(self, state: AgentState) -> dict[str, Any]:
         schemes = state["schemes"][:MAX_BUTTONS]
         lines = [f"{s['rank']}. {s['name']}\n   {s['cited_clause']}" for s in schemes]
-        text = "You qualify for these schemes:\n\n" + "\n".join(lines) + "\n\nWhich one should I apply for?"
+        text = "\n\n".join([messages.SCHEMES_INTRO, "\n".join(lines), messages.SCHEMES_QUESTION])
         reply = ask("scheme", text, {s["scheme_id"]: s["name"] for s in schemes})
         choice = chosen(reply) or typed(reply)
         for index, scheme in enumerate(schemes, start=1):
@@ -450,7 +582,7 @@ class Nodes:
         # A fixed sentence, so a hostile page cannot word the question via the model.
         field = state["missing_field"]
         label = field.replace("_", " ")
-        value = typed(ask(f"field_{field}", f"The form needs your {label}. Please reply with it."))
+        value = typed(ask(f"field_{field}", messages.FIELD_NEEDED.format(label=label)))
         if not value:
             return {}
         return {
@@ -498,9 +630,9 @@ class Nodes:
         ]
         report = state.get("doctor_report")
         if report and report["mismatches"]:
-            lines.append("\nPlease check:")
+            lines.append(f"\n{messages.REVIEW_FLAGS}")
             lines += [f"- {m['field']}: {m['detail']}" for m in report["mismatches"]]
-        text = "Please check your application:\n\n" + "\n".join(lines)
+        text = f"{messages.REVIEW_INTRO}\n\n" + "\n".join(lines)
         return {"review": {"text": text, "image_ref": image_ref}}
 
     async def review(self, state: AgentState) -> dict[str, Any]:

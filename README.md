@@ -17,7 +17,9 @@ uv run pytest
 uv run uvicorn --factory app.main:create_app --port 8000
 ```
 
-Start the LLM proxy in a second terminal:
+The bot uses Groq by default, so set `LLM_API_KEY` to a Groq key. To use the free
+keyless proxy instead, set `LLM_BASE_URL=http://localhost:8080/v1` and `LLM_MODEL=auto`,
+then start it in a second terminal:
 
 ```bash
 uvx --python 3.12 freellmpool==0.13.0 proxy
@@ -28,8 +30,8 @@ fake portal's OTP is `123456` and its CAPTCHA is `ABCD`.
 
 ## Deploy
 
-The image runs the API and the freellmpool proxy in one container, and works on any
-platform that sets `PORT`. It needs a persistent volume at `/data`, one instance
+The image runs the API, plus the freellmpool proxy when `LLM_BASE_URL` points at
+localhost, and works on any platform that sets `PORT`. It needs a persistent volume at `/data`, one instance
 only, and no scale-to-zero: SQLite and the live event stream live in that instance,
 and work continues after the webhook has been answered.
 
@@ -80,8 +82,12 @@ the browser's `EventSource` cannot set headers, so use `?key=` instead.
 
 ## Safety rules built into the code
 
-- **Personal data and the LLM:** the model sees field names and masked page text,
-  never values. It names a field and the graph types the value locally.
+- **AI chat:** the model handles the conversation and the basic eligibility details,
+  with ID-shaped text masked first. If it fails, the fixed questions take over.
+- **Sensitive steps:** OTPs, CAPTCHAs, logins, documents and approval stay in fixed
+  code and never reach the model.
+- **Portal planning:** the model sees field names and masked page text, never values.
+  It names a field and the graph types the value locally.
 - **Encryption:** the vault, uploaded files and LangGraph checkpoints are encrypted.
 - **Final submit:** the model can never press it. It needs the user's approval, and
   `ALLOW_REAL_SUBMIT=true`. It defaults to false, which stops at the review page.

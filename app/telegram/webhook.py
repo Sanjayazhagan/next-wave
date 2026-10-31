@@ -34,16 +34,23 @@ def to_inbound(message: dict[str, Any]) -> Inbound:
     return Inbound("other")
 
 
-async def _handle_message(message: dict[str, Any], ctx: ConversationContext) -> None:
+async def _handle_message(
+    message: dict[str, Any], ctx: ConversationContext, client: TelegramClient
+) -> None:
     chat = message["chat"]
     if chat.get("type") != "private":
         return
+    try:
+        await client.send_typing(str(chat["id"]))
+    except ChannelError as exc:
+        log.warning("Could not show typing: %s", exc)
     user_id = f"{TELEGRAM_PREFIX}{chat['id']}"
     inbound = to_inbound(message)
-    # Telegram sends /start on open, which must not answer a pending question.
-    is_start = inbound.kind == "text" and inbound.text.strip() == START_COMMAND
-    if is_start and ctx.sessions.active_for_phone(user_id):
-        return
+    # /start begins again, so a stuck chat can always be restarted.
+    if inbound.kind == "text" and inbound.text.strip() == START_COMMAND:
+        session = ctx.sessions.active_for_phone(user_id)
+        if session and session.status != "running":
+            await ctx.manager.cancel(session.id)
     await handle_inbound(user_id, inbound, ctx)
 
 
@@ -76,7 +83,7 @@ async def process_update(
         if "callback_query" in update:
             await _handle_button(update["callback_query"], ctx, client)
         elif "message" in update:
-            await _handle_message(update["message"], ctx)
+            await _handle_message(update["message"], ctx, client)
     except Exception:
         log.exception("Failed to handle update %s", update_id)
 

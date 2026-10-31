@@ -43,14 +43,7 @@ def test_explored_run_is_saved_then_replayed_without_llm(
     calls_after_explore = network.llm_calls
     assert calls_after_explore > 0
 
-    chat.text("hi again")
-    chat.press("consent:yes")
-    chat.photo()
-    chat.press("documents:done")
-    chat.text("Tamil Nadu")
-    chat.text("Class 12")
-    chat.text("120000")
-    chat.press("question_community:bc")
+    chat.up_to_login()
     chat.text("123456")  # The portal ID is already in the vault, so OTP comes first.
     chat.text("ABCD")
 
@@ -66,14 +59,7 @@ def test_broken_step_is_self_repaired_and_saved(
 
     browser.renames["Continue"] = "Proceed"  # What the chaos script does.
 
-    chat.text("hi")
-    chat.press("consent:yes")
-    chat.photo()
-    chat.press("documents:done")
-    chat.text("Tamil Nadu")
-    chat.text("Class 12")
-    chat.text("120000")
-    chat.press("question_community:bc")
+    chat.up_to_login()
     chat.text("123456")
     chat.text("ABCD")
 
@@ -88,14 +74,7 @@ def test_broken_step_is_self_repaired_and_saved(
     # The repaired skill is saved, so the next run needs no LLM.
     calls = network.llm_calls
     chat.press("approval:approve")
-    chat.text("hi")
-    chat.press("consent:yes")
-    chat.photo()
-    chat.press("documents:done")
-    chat.text("Tamil Nadu")
-    chat.text("Class 12")
-    chat.text("120000")
-    chat.press("question_community:bc")
+    chat.up_to_login()
     chat.text("123456")
     chat.text("ABCD")
     assert "Please check your application" in network.last_text()
@@ -192,7 +171,9 @@ def test_final_submit_only_happens_after_approval(
 def test_receipt_is_sent_as_text_and_tamil_voice_note(
     make_client, network: Network, browser: StubBrowser
 ) -> None:
-    client = make_client(allow_real_submit=True, language_service_url=LANGUAGE_URL)
+    client = make_client(
+        allow_real_submit=True, language_service_url=LANGUAGE_URL, default_language="as"
+    )
     chat = Chat(client, network)
     chat.up_to_review()
     chat.press("approval:approve")
@@ -202,7 +183,7 @@ def test_receipt_is_sent_as_text_and_tamil_voice_note(
     upload = network.uploads[-1]
     assert b"OggS" in upload.content  # Real ffmpeg output.
     assert b"OpusHead" in upload.content
-    assert any(RECEIPT in text and text.startswith("[ta]") for text in network.texts())
+    assert any(RECEIPT in text and text.startswith("[as]") for text in network.texts())
 
 
 def test_stopped_run_labels_an_earlier_receipt(
@@ -296,9 +277,12 @@ def test_doctor_and_rules_are_used_when_merged(
     plugins.doctor = check_application
     chat = Chat(make_client(), network)
 
-    chat.up_to_login()
+    chat.up_to_documents()
     assert "Clause 3.1" in network.last_text()
     chat.press("scheme:pms")
+    assert "Please send photos" in network.last_text()
+    chat.photo()
+    chat.press("documents:done")
     chat.text("portal-user")
     chat.text("123456")
     chat.text("ABCD")
@@ -312,7 +296,7 @@ def test_no_matching_scheme_ends_politely(
     plugins = request.getfixturevalue("plugins")
     plugins.rules = lambda _: EligibilityResponse(schemes=[])
     chat = Chat(make_client(), network)
-    chat.up_to_login()
+    chat.up_to_documents()
     assert "could not find a scheme" in network.last_text()
 
 
@@ -323,11 +307,8 @@ def test_missing_modules_are_skipped_cleanly(
     plugins.extraction = None
     chat = Chat(make_client(), network)
 
-    chat.text("hi")
-    chat.press("consent:yes")
-    chat.photo()
-    chat.press("documents:done")
-    assert "Which state" in network.last_text()
+    chat.up_to_login()
+    assert "login ID" in network.last_text()
 
 
 def test_declining_consent_ends_the_session(
@@ -374,7 +355,7 @@ def test_field_missing_from_profile_is_asked_for(
 
 
 def test_voice_note_answers_a_prompt(make_client, network: Network) -> None:
-    chat = Chat(make_client(language_service_url=LANGUAGE_URL), network)
+    chat = Chat(make_client(language_service_url=LANGUAGE_URL, default_language="as"), network)
     chat.text("hi")
     network.translated.clear()
     chat.voice()
@@ -389,10 +370,10 @@ def test_voice_note_without_language_service_asks_to_type(chat: Chat, network: N
     assert "Please type" in network.last_text()
 
 
-def test_prompts_are_translated_for_the_session_language(make_client, network: Network) -> None:
-    chat = Chat(make_client(language_service_url=LANGUAGE_URL), network)
+def test_other_languages_use_the_language_service(make_client, network: Network) -> None:
+    chat = Chat(make_client(language_service_url=LANGUAGE_URL, default_language="as"), network)
     chat.text("hi")
-    assert network.last_text().startswith("[ta] ")
+    assert network.last_text().startswith("[as] ")
 
 
 def test_file_when_not_expected_is_refused(chat: Chat, network: Network) -> None:
@@ -477,3 +458,54 @@ def test_aadhaar_is_masked_on_the_review_message(
     add_aadhaar(plugins)
     chat.up_to_review()
     assert AADHAAR not in "\n".join(network.texts())
+
+
+# --- Order of the conversation ---
+
+
+def test_questions_come_before_documents(chat: Chat, network: Network) -> None:
+    chat.text("hi")
+    chat.press("consent:yes")
+    assert "Which state" in network.last_text()
+    chat.text("Tamil Nadu")
+    chat.text("Class 12")
+    chat.text("120000")
+    chat.press("question_community:bc")
+    assert "Is everything correct?" in network.last_text()
+    chat.press("confirm:yes")
+    assert "Please send photos" in network.last_text()
+
+
+def test_done_with_no_document_says_so(chat: Chat, network: Network) -> None:
+    chat.up_to_documents()
+    chat.press("documents:done")
+    assert "at least one document" in network.last_text()
+
+    chat.photo()
+    assert "Got it" in network.last_text()
+    chat.press("documents:done")
+    assert "login ID" in network.last_text()
+
+
+def test_answers_survive_reading_the_documents(
+    client: TestClient, chat: Chat, plugins: Plugins
+) -> None:
+    extractor = StubExtractor()
+
+    async def extract_with_income(images):
+        result = await extractor(images)
+        result.profile.fields["annual_income"] = ProfileField(
+            value="999999", source_document="income", confidence=0.99
+        )
+        return result
+
+    plugins.extraction = extract_with_income
+    chat.up_to_login()
+
+    profile = client.get(
+        f"/session/{session_id_for(client)}", headers={"X-API-Key": "test-api-token"}
+    ).json()["profile"]
+    assert profile["annual_income"] == {
+        "value": "120000", "source_document": "user_answer", "confidence": 1.0
+    }
+    assert profile["full_name"]["source_document"] == "marksheet"

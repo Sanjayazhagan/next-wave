@@ -11,7 +11,14 @@ import pytest
 from cryptography.exceptions import InvalidTag
 
 from app.config import Settings
-from app.llm import ChatLlm, LlmError, parse_json_object
+from app.llm import (
+    DEFAULT_RATE_LIMIT_WAIT,
+    MAX_RATE_LIMIT_WAIT,
+    ChatLlm,
+    LlmError,
+    _rate_limit_wait,
+    parse_json_object,
+)
 from app.planner import Planner, PlanError
 from app.plugins import load_plugins
 from app.redact import mask_for_display, redact
@@ -161,11 +168,28 @@ def chat_reply(content: str) -> httpx.Response:
 
 def test_llm_retries_after_a_rate_limit_and_a_bad_reply() -> None:
     llm, seen = fake_llm(
-        [httpx.Response(429, json={}), chat_reply("not json"), chat_reply('{"ok": true}')]
+        [
+            httpx.Response(429, headers={"retry-after": "0"}, json={}),
+            chat_reply("not json"),
+            chat_reply('{"ok": true}'),
+        ]
     )
     assert asyncio.run(llm.complete_json("s", "u")) == {"ok": True}
     assert len(seen) == 3
     assert json.loads(seen[0].content)["model"] == "auto"
+
+
+def test_rate_limit_waits_as_told_up_to_a_limit() -> None:
+    def wait_for(headers: dict[str, str]) -> float:
+        request = httpx.Request("POST", "http://llm.test")
+        response = httpx.Response(429, headers=headers, request=request)
+        return _rate_limit_wait(httpx.HTTPStatusError("429", request=request, response=response))
+
+    assert wait_for({"retry-after": "7"}) == 7
+    assert wait_for({"retry-after": "900"}) == MAX_RATE_LIMIT_WAIT
+    assert wait_for({"retry-after": "soon"}) == DEFAULT_RATE_LIMIT_WAIT
+    assert wait_for({}) == DEFAULT_RATE_LIMIT_WAIT
+    assert _rate_limit_wait(LlmError("bad reply")) == 0
 
 
 def test_llm_gives_up_after_three_attempts() -> None:

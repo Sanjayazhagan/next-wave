@@ -36,8 +36,13 @@ your information or use it for advertising.</p>
 <ul>
 <li>Telegram or Meta processes messages, because they travel over Telegram or
 WhatsApp.</li>
-<li>AI model providers receive page structure and field names to plan each step. They
-do not receive your personal values, which are masked first.</li>
+<li>AI model providers receive your chat messages, including details you share such as
+your state, course, income and community, so the assistant can reply. ID numbers,
+phone numbers and email addresses are masked first. Some providers may keep or learn
+from this text, so please do not share anything you want kept private in the chat.</li>
+<li>AI model providers also receive page structure and field names to plan each portal
+step. They do not receive the personal values typed into portals. OTPs, CAPTCHA
+answers, passwords, portal logins and documents are never sent to them.</li>
 <li>Translation and speech providers process voice notes and text in your language.</li>
 <li>Government portals receive the details you approve for your application.</li>
 </ul>

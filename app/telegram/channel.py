@@ -3,10 +3,10 @@ import logging
 from typing import Any
 
 from app.channels import TELEGRAM_PREFIX, ChannelError
-from app.conversation import ENGLISH
 from app.language import LanguageError, LanguageService, to_voice_note
 from app.sessions import Session
 from app.telegram.client import TelegramClient
+from app.translations import localize
 from app.vault import FileStore
 
 log = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ class TelegramChannel:
         self._files = files
 
     async def _localize(self, session: Session, text: str) -> str:
-        return await self._language.translate(text, ENGLISH, session.language)
+        return await localize(text, session.language, self._language)
 
     async def deliver(self, session: Session, prompt: dict[str, Any]) -> None:
         try:
@@ -38,7 +38,9 @@ class TelegramChannel:
         if prompt.get("image_ref"):
             data, mime_type = self._files.get(prompt["image_ref"])
             await self._client.send_photo(chat_id, data, mime_type)
-        text = await self._localize(session, prompt["text"])
+        text = prompt["text"]
+        if not prompt.get("localized"):
+            text = await self._localize(session, text)
         buttons = prompt.get("buttons")
         if not buttons:
             await self._client.send_text(chat_id, text)

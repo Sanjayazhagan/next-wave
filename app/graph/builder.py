@@ -14,35 +14,55 @@ def build_graph(deps: Deps, checkpointer: BaseCheckpointSaver) -> Any:
     graph = StateGraph(AgentState)
 
     for name in (
-        "consent", "collect_documents", "extract_profile", "ask_question",
-        "match_schemes", "choose_scheme", "doctor", "prepare_portal",
+        "choose_language", "consent", "intake_think", "intake_listen", "ask_question",
+        "confirm_details", "fix_details",
+        "collect_documents", "extract_profile", "match_schemes", "choose_scheme", "doctor", "prepare_portal",
         "portal_login", "browser_step", "challenge", "ask_field", "handover",
         "save_skill", "prepare_review", "review", "edit", "submit", "receipt",
         "finish",
     ):
         graph.add_node(name, getattr(nodes, name))
 
+    def after_language(state: AgentState) -> str:
+        return "consent" if state.get("language") else "choose_language"
+
     def after_consent(state: AgentState) -> str:
         if state.get("final"):
             return "finish"
-        return "collect_documents" if state.get("consent") else "consent"
+        return "intake_think" if state.get("consent") else "consent"
 
-    def after_documents(state: AgentState) -> str:
-        return "extract_profile" if state.get("documents_done") else "collect_documents"
+    def next_after_questions() -> str:
+        return "match_schemes" if plugins.rules else "collect_documents"
 
-    def next_after_scheme() -> str:
-        return "doctor" if plugins.doctor else "prepare_portal"
+    def after_think(state: AgentState) -> str:
+        return {
+            "listen": "intake_listen",
+            "fallback": "ask_question",
+        }.get(state["intake_route"], "confirm_details")
 
     def after_questions(state: AgentState) -> str:
-        if not state.get("questions_done"):
-            return "ask_question"
-        return "match_schemes" if plugins.rules else next_after_scheme()
+        return "confirm_details" if state.get("questions_done") else "ask_question"
+
+    def after_confirm(state: AgentState) -> str:
+        choice = state.get("details_choice")
+        if choice == "yes":
+            return next_after_questions()
+        return "fix_details" if choice == "change" else "confirm_details"
+
+    def after_fix(state: AgentState) -> str:
+        return "fix_details" if state.get("fix_error") else "confirm_details"
 
     def after_match(state: AgentState) -> str:
         return "finish" if state.get("final") else "choose_scheme"
 
     def after_choice(state: AgentState) -> str:
-        return next_after_scheme() if state.get("scheme") else "choose_scheme"
+        return "collect_documents" if state.get("scheme") else "choose_scheme"
+
+    def after_documents(state: AgentState) -> str:
+        return "extract_profile" if state.get("documents_done") else "collect_documents"
+
+    def after_extraction(state: AgentState) -> str:
+        return "doctor" if plugins.doctor else "prepare_portal"
 
     def by_route(state: AgentState) -> str:
         return {
@@ -71,20 +91,28 @@ def build_graph(deps: Deps, checkpointer: BaseCheckpointSaver) -> Any:
         "handover", "save_skill", "receipt", "finish",
     ]
 
-    graph.add_edge(START, "consent")
-    graph.add_conditional_edges("consent", after_consent, ["consent", "collect_documents", "finish"])
+    graph.add_edge(START, "choose_language" if deps.settings.choose_language else "consent")
+    graph.add_conditional_edges("choose_language", after_language, ["choose_language", "consent"])
+    graph.add_conditional_edges("consent", after_consent, ["consent", "intake_think", "finish"])
+    graph.add_conditional_edges(
+        "intake_think", after_think,
+        ["intake_listen", "ask_question", "confirm_details"],
+    )
+    graph.add_edge("intake_listen", "intake_think")
+    graph.add_conditional_edges("ask_question", after_questions, ["ask_question", "confirm_details"])
+    graph.add_conditional_edges(
+        "confirm_details", after_confirm,
+        ["confirm_details", "fix_details", "match_schemes", "collect_documents"],
+    )
+    graph.add_conditional_edges("fix_details", after_fix, ["fix_details", "confirm_details"])
+    graph.add_conditional_edges("match_schemes", after_match, ["choose_scheme", "finish"])
+    graph.add_conditional_edges(
+        "choose_scheme", after_choice, ["choose_scheme", "collect_documents"]
+    )
     graph.add_conditional_edges(
         "collect_documents", after_documents, ["collect_documents", "extract_profile"]
     )
-    graph.add_edge("extract_profile", "ask_question")
-    graph.add_conditional_edges(
-        "ask_question", after_questions,
-        ["ask_question", "match_schemes", "doctor", "prepare_portal"],
-    )
-    graph.add_conditional_edges("match_schemes", after_match, ["choose_scheme", "finish"])
-    graph.add_conditional_edges(
-        "choose_scheme", after_choice, ["choose_scheme", "doctor", "prepare_portal"]
-    )
+    graph.add_conditional_edges("extract_profile", after_extraction, ["doctor", "prepare_portal"])
     graph.add_edge("doctor", "prepare_portal")
     for name in ("prepare_portal", "portal_login", "browser_step", "challenge", "handover", "submit"):
         graph.add_conditional_edges(name, by_route, route_targets)
