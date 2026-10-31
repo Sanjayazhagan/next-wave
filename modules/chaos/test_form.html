@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chaos test form (local only)</title>
+<style>body{font:15px sans-serif;max-width:640px;margin:24px auto}.field{margin:12px 0}label{display:block;font-weight:600}</style>
+</head>
+<body>
+<!-- Local test page for chaos.js. Submitting prints the form data; nothing is sent anywhere. -->
+<h1>Scholarship application (test form)</h1>
+<form id="app">
+  <div id="fields">
+    <div class="field"><label for="full_name">Name of the applicant</label><input id="full_name" name="full_name" required></div>
+    <div class="field"><label for="father_name">Father's name</label><input id="father_name" name="father_name"></div>
+    <div class="field"><label for="dob">Date of birth</label><input id="dob" name="dob" type="date"></div>
+    <div class="field"><label for="category">Category</label>
+      <select id="category" name="category"><option value="">Select</option><option>BC</option><option>MBC</option><option>SC</option><option>ST</option><option>OC</option></select></div>
+    <div class="field"><label for="income">Annual family income</label><input id="income" name="income" inputmode="numeric" placeholder="Annual family income"></div>
+    <div class="field"><label for="course">Course</label><input id="course" name="course"></div>
+    <div class="field"><label for="institution">Institution</label><input id="institution" name="institution"></div>
+    <div class="field"><label for="mobile">Mobile number</label><input id="mobile" name="mobile" aria-label="Mobile number"></div>
+    <div class="field"><label for="certificate">Upload certificate</label><input id="certificate" name="certificate" type="file"></div>
+  </div>
+  <button type="submit">Submit</button>
+</form>
+<pre id="out"></pre>
+<script>
+document.getElementById("app").addEventListener("submit", async function (e) {
+  e.preventDefault();
+  var started = Date.now();
+  await fetch("data:application/json,{}");   // a network call, so the "slow" mode has something to delay
+  var data = {};
+  new FormData(e.target).forEach(function (v, k) { data[k] = v instanceof File ? v.name : v; });
+  data._ms = Date.now() - started;
+  document.getElementById("out").textContent = JSON.stringify(data);
+});
+</script>
+</body>
+</html>
