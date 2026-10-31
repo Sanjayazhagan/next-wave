@@ -16,7 +16,7 @@ from fastapi import HTTPException
 from playwright.async_api import Error as BrowserError
 from browser.protocol import BrowserAction
 from browser.public_web import assert_public_url, public_url_syntax
-from browser.step_policy import category, final_path
+from browser.step_policy import category, final_path, OTP_VERIFY
 
 # Human-only CAPTCHA providers; no agent-side solver or challenge bypass.
 CAPTCHA_PROVIDER_SUFFIXES=('recaptcha.net','google.com','hcaptcha.com','challenges.cloudflare.com','turnstile.cloudflare.com')
@@ -80,7 +80,7 @@ class GeneralContext:
     tab_ids:dict=field(default_factory=dict)
     action_results:dict=field(default_factory=dict)
     dialogs:list=field(default_factory=list)
-    write_scope:tuple|None=None  # (origin, intent); active only during a vetted click
+    write_scope:tuple|None=None  # (origin, intent, optional exact URL); only during a vetted click
     human_captcha_until:float=0.0
 
     def permitted(self,url):
@@ -110,7 +110,10 @@ class GeneralContext:
         if method not in ('GET','HEAD','OPTIONS'):
             scoped = (self.write_scope is not None and method == 'POST'
                       and origin(url) == self.write_scope[0]
-                      and self.write_scope[1] in ('otp_send','otp_verify','human_challenge'))
+                      and (self.write_scope[1] in ('otp_send','otp_verify','human_challenge')
+                           or (self.write_scope[1] == 'upload_form'
+                               and len(self.write_scope) == 3
+                               and safe_url(url) == self.write_scope[2])))
             # Provider POSTs needed for manual CAPTCHA completion. Enabled
             # only during a scoped live human task and only to known HTTPS
             # challenge endpoints; never generic agent or site POST permission.
@@ -160,8 +163,9 @@ async def census(session):
                 # these inputs; expose them as fileupload, not textbox.
                 if await loc.get_attribute('type') != 'file':
                     continue
-            data=await loc.evaluate(r'''e=>({tag:e.tagName.toLowerCase(),type:e.getAttribute('type')||'',role:e.getAttribute('role')||'',label:(e.labels?[...e.labels].map(x=>x.innerText).join(' '):'')||e.getAttribute('aria-label')||e.getAttribute('title')||e.getAttribute('placeholder')||e.innerText||e.getAttribute('name')||'',name:e.getAttribute('name')||'',required:e.required||e.getAttribute('aria-required')==='true',disabled:e.disabled||e.getAttribute('aria-disabled')==='true',value:e.type==='file'?'':(e.value||(e.isContentEditable?e.innerText:'')),href:e.getAttribute('href')||'',options:e.tagName==='SELECT'?[...e.options].slice(0,80).map(o=>({value:o.value,label:o.text,disabled:o.disabled})):[],checked:!!e.checked,form:!!e.form,accept:e.getAttribute('accept')||'',autocomplete:e.getAttribute('autocomplete')||'',form_method:e.form?.method||'',form_action:e.form?.action||'',readonly:!!e.readOnly,multiple:!!e.multiple,min:e.getAttribute('min'),max:e.getAttribute('max'),maxlength:e.getAttribute('maxlength'),pattern:e.getAttribute('pattern'),description:(e.getAttribute('aria-describedby')||'').split(/\s+/).map(id=>e.ownerDocument.getElementById(id)?.innerText||'').join(' ').slice(0,500),upload_hint:e.type==='file'?(e.closest('label')?.innerText||e.parentElement?.innerText||'').slice(0,320):'',validation_message:e.validationMessage||'',file_count:e.files?.length||0,contenteditable:e.isContentEditable})''')
+            data=await loc.evaluate(r'''e=>({tag:e.tagName.toLowerCase(),type:e.getAttribute('type')||'',role:e.getAttribute('role')||'',label:(e.labels?[...e.labels].map(x=>x.innerText).join(' '):'')||e.getAttribute('aria-label')||e.getAttribute('title')||e.getAttribute('placeholder')||e.innerText||e.getAttribute('name')||'',name:e.getAttribute('name')||'',required:e.required||e.getAttribute('aria-required')==='true',disabled:e.disabled||e.getAttribute('aria-disabled')==='true',value:e.type==='file'?'':(e.value||(e.isContentEditable?e.innerText:'')),href:e.getAttribute('href')||'',options:e.tagName==='SELECT'?[...e.options].slice(0,80).map(o=>({value:o.value,label:o.text,disabled:o.disabled})):[],checked:!!e.checked,form:!!e.form,accept:e.getAttribute('accept')||'',autocomplete:e.getAttribute('autocomplete')||'',form_method:e.form?.method||'',form_action:e.form?(e.hasAttribute('formaction')?e.formAction:e.form.action):'',form_enctype:e.form?.enctype||'',form_index:e.form?[...e.ownerDocument.forms].indexOf(e.form):-1,form_has_file:!!e.form&&[...e.form.elements].some(c=>c.tagName==='INPUT'&&c.type==='file'),form_upload_only:(()=>{const f=e.form;if(!f||f.method.toLowerCase()!=='post')return false;const inputs=[...f.elements];if(!inputs.some(c=>c.tagName==='INPUT'&&c.type==='file'))return false;if(inputs.some(c=>['INPUT','TEXTAREA','SELECT'].includes(c.tagName)&&!['file','hidden','submit','button','reset','image'].includes(c.type)))return false;const action=e.hasAttribute('formaction')?e.formAction:f.action;const path=new URL(action,e.ownerDocument.URL).pathname;if(!/(?:^|\/)(?:upload|attach|document|file)[\w-]*(?:\/|$)/i.test(path))return false;return !/(?:submit|finali[sz]e|complete|send|confirm|approve)\s+(?:the\s+)?(?:application|form|registration)/i.test(f.innerText||'')})(),readonly:!!e.readOnly,multiple:!!e.multiple,min:e.getAttribute('min'),max:e.getAttribute('max'),maxlength:e.getAttribute('maxlength'),pattern:e.getAttribute('pattern'),description:(e.getAttribute('aria-describedby')||'').split(/\s+/).map(id=>e.ownerDocument.getElementById(id)?.innerText||'').join(' ').slice(0,500),upload_hint:e.type==='file'?(e.closest('label')?.innerText||e.parentElement?.innerText||'').slice(0,320):'',validation_message:e.validationMessage||'',file_count:e.files?.length||0,contenteditable:e.isContentEditable})''')
             data['label']=data['label'].strip()[:300];data['name']=data['name'][:100];data['upload_hint']=data.get('upload_hint','').strip()[:320]
+            if data['form_action']:data['form_action']=safe_url(data['form_action'])
             description=' '.join((data['label'],data['name'],data['type'],data['autocomplete']))
             sensitive=bool(AUTH.search(description));private=bool(IDENTIFIER.search(description))
             # Intent classification is contextual, but is not a final-submit
@@ -188,12 +192,21 @@ async def census(session):
     # hidden upload inputs. Reclassify the entire observation consistently.
     has_file=any(e['type']=='file' for e in elements)
     has_auth=any(e['redacted'] and e['tag'] in ('input','textarea') and AUTH.search(e['label']+' '+e['type']) for e in elements)
+    has_verify_button=any(OTP_VERIFY.search(e['label']) and e['tag'] in ('button','input') for e in elements)
     for e in elements:
         kind=category(e,has_file=has_file,has_auth=has_auth)
+        # Numeric OTP widgets commonly expose accessibility role=spinbutton
+        # and a label like 'Code' rather than 'OTP'. Only treat one as a
+        # human-only OTP field if a *separate* Verify OTP control is observed.
+        if (kind=='ordinary' and has_verify_button and e['tag']=='input'
+                and e['type'] in ('number','tel','text')
+                and re.search(r'\b(?:code|passcode|pin|digits)\b',e['label'],re.I)
+                and not re.search(r'postal|zip|country|coupon|discount',e['label'],re.I)):
+            kind='human_input';e['auth_kind']='otp'
         e['category']=kind
         if kind=='human_input':e['risk']='human_auth';e['redacted']=True
         elif kind in ('final','final_unknown'):e['risk']='irreversible'
-        elif kind in ('otp_send','otp_verify'):e['risk']='human_auth'
+        elif kind in ('otp_send','otp_verify','captcha_refresh'):e['risk']='human_auth'
         elif kind=='upload_step':e['risk']='intermediate'
         # Next/Save Draft remain ordinary controls, but POST remains reviewed.
     return elements,targets,frames,truncated

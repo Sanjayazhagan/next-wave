@@ -140,6 +140,7 @@ def identify(e):
 
 def human_kind(e):
     label = ' '.join(str(e.get(k, '')) for k in ('label','name','autocomplete','type'))
+    if e.get('auth_kind')=='otp':return 'otp'
     if re.search(r'captcha|security.?code|human.?verification',label,re.I): return 'captcha'
     if re.search(r'otp|one.time|verification.?code|auth.?code',label,re.I): return 'otp'
     return None
@@ -193,6 +194,9 @@ def convert(obs, info):
                        # updated core can use them for rigorous upload checks.
                        'element_type':e.get('type',''),
                        'action_category':e.get('category','ordinary'),
+                       'form_method':e.get('form_method',''),
+                       'form_action':e.get('form_action',''),
+                       'dedicated_upload_form':bool(e.get('form_upload_only',False)),
                        'accept':e.get('accept','') if role=='fileupload' else '',
                        'required':bool(e.get('required',False)),
                        'multiple':bool(e.get('multiple',False)),
@@ -384,14 +388,26 @@ async def action(sid:str,req:CoreAction,x_internal_key:str|None=Header(None)):
                 after=await observe(ctx);convert(after,info);info.fingerprint=ctx.fingerprint
                 return {'ok':True,'kind':'auth_verification','verified':False}
             if intent=='upload_step':
-                # A page-level Upload button is a POST on many real forms.
-                # Autonomous permission is strictly operator-reviewed by
-                # origin, not inherited from generic public-web browsing.
-                if not intermediate_post_permitted(ctx.page.url,public_web=ctx.public_web):
-                    raise HTTPException(403,'Upload action requires an operator-reviewed intermediate POST origin or human assistance')
-                await ctx.targets[e_ref].click(timeout=8000)
+                # Verify the file belongs to THIS form. Attaching a file to
+                # an unrelated input must never unlock a Submit button.
+                attached=any(c.get('type')=='file' and c.get('file_count',0)>0
+                             and c.get('form_index',-1)==e.get('form_index')
+                             and c.get('frame_id')==e.get('frame_id')
+                             for c in observation['elements'])
+                if not attached:
+                    raise HTTPException(409,'Attach a document to this upload form before clicking Upload')
+                if e.get('form_upload_only'):
+                    # Only a dedicated file-only POST with a positive upload
+                    # endpoint can run without an operator-review wildcard.
+                    # The request interceptor permits that exact POST URL for
+                    # this click and still blocks final/application paths.
+                    await scoped_interaction(ctx,ctx.targets[e_ref],'upload_form',post_target=e['form_action'])
+                else:
+                    if not intermediate_post_permitted(ctx.page.url,public_web=ctx.public_web):
+                        raise HTTPException(403,'Upload action requires an operator-reviewed intermediate POST origin or human assistance')
+                    await ctx.targets[e_ref].click(timeout=8000)
                 after=await observe(ctx);convert(after,info);info.fingerprint=ctx.fingerprint
-                return {'ok':True,'kind':'document_upload_step'}
+                return {'ok':True,'kind':'document_upload_step','confirmed_by_portal':False}
             raise HTTPException(403,'Sensitive action requires human assistance or a reviewed portal adapter')
         if req.type=='upload':
             if not e or e.get('type')!='file':
@@ -424,13 +440,20 @@ async def action(sid:str,req:CoreAction,x_internal_key:str|None=Header(None)):
         return {'ok':True}
 
 
-async def scoped_interaction(ctx,locator,intent):
-    """Permit one same-origin auth POST during one approved observed click.
+async def scoped_interaction(ctx,locator,intent,post_target=None):
+    """Permit a vetted write during this single observed click only.
 
-    Never grants final-submit URL patterns and never applies to arbitrary
-    background or cross-origin writes outside the scoped click.
+    Auth challenges are same-origin scoped. A dedicated upload form instead
+    binds to the exact observed POST URL (never an arbitrary same-origin POST).
+    Final-submission network paths are denied in either case.
     """
-    try:ctx.write_scope=(origin(ctx.page.url), intent)
+    try:
+        scope_origin=origin(ctx.page.url)
+        if intent=='upload_form':
+            if not post_target or origin(post_target)!=scope_origin or final_path(post_target):
+                raise HTTPException(403,'Upload target needs a reviewed portal adapter')
+            ctx.write_scope=(scope_origin,intent,post_target.split('#',1)[0].split('?',1)[0])
+        else:ctx.write_scope=(scope_origin,intent)
     except ValueError:ctx.write_scope=None  # in-memory about:blank test fixture only
     try:
         await locator.click(timeout=8000)
@@ -447,7 +470,7 @@ async def challenge_regions(ctx):
             region=await (await frame.frame_element()).bounding_box()
             if region: boxes.append(region)
         except Exception:pass
-    for locator in [ctx.page.locator('img[alt*="captcha" i],img[src*="captcha" i],canvas[aria-label*="captcha" i]')]:
+    for locator in [ctx.page.locator('img[alt*="captcha" i],img[src*="captcha" i],img[aria-label*="captcha" i],img[alt*="verification" i],img[alt*="security code" i],canvas[aria-label*="captcha" i],[role=img][aria-label*="captcha" i]')]:
         try:
             for i in range(min(await locator.count(),8)):
                 region=await locator.nth(i).bounding_box()
@@ -496,7 +519,7 @@ async def human_view(sid:str,req:HumanBegin,x_internal_key:str|None=Header(None)
         # values are returned and no screenshot is sent to the LLM.
         controls=[{'ref':e['ref'],'label':e['label'],'category':e['category'],
                    'type':e['type'],'bounds':e['bounds']} for e in obs['elements']
-                  if e['category'] in ('human_input','otp_send','otp_verify','upload_step')]
+                  if e['category'] in ('human_input','otp_send','otp_verify','upload_step','captcha_refresh')]
         captcha_boxes=await challenge_regions(ctx)
         return {'state':'human_in_control','url':obs['url'],'screenshot_base64':obs['screenshot_base64'],
                 'viewport':obs['viewport'],'controls':controls,'challenge_boxes':captcha_boxes,
@@ -517,10 +540,11 @@ async def human_act(sid:str,req:HumanAction,x_internal_key:str|None=Header(None)
             await ctx.targets[e['ref']].fill(req.value,timeout=8000)
             info.auth_value_entered=True
         elif req.kind=='click':
-            if not e or e['category'] not in ('otp_send','otp_verify','upload_step'):
+            if not e or e['category'] not in ('otp_send','otp_verify','upload_step','captcha_refresh'):
                 raise HTTPException(403,'Human link cannot click final/unknown controls')
-            if e['category']=='upload_step' and not any(c.get('type')=='file' and c.get('file_count') for c in obs['elements']):
-                raise HTTPException(409,'Attach the document before using the upload button')
+            if e['category']=='upload_step' and not any(c.get('type')=='file' and c.get('file_count')
+                and c.get('form_index',-1)==e.get('form_index') and c.get('frame_id')==e.get('frame_id') for c in obs['elements']):
+                raise HTTPException(409,'Attach the document to this upload form before using the upload button')
             if e['category']=='otp_send':
                 now=time.time()
                 if now-info.otp_window>600:info.otp_window=now;info.otp_sent=0
@@ -529,7 +553,10 @@ async def human_act(sid:str,req:HumanAction,x_internal_key:str|None=Header(None)
             if e['category']=='otp_verify':
                 if info.otp_verify_count>=5:raise HTTPException(429,'Too many verification attempts; stop and check the official portal')
                 info.otp_verify_count+=1
-            await scoped_interaction(ctx,ctx.targets[e['ref']], 'human_challenge')
+            if e['category']=='upload_step' and e.get('form_upload_only'):
+                await scoped_interaction(ctx,ctx.targets[e['ref']], 'upload_form',post_target=e['form_action'])
+            else:
+                await scoped_interaction(ctx,ctx.targets[e['ref']], 'human_challenge')
         elif req.kind=='challenge_click':
             if req.x is None or req.y is None:raise HTTPException(422,'Click coordinates are required')
             matched=any(r['x']<=req.x<=r['x']+r['width'] and r['y']<=req.y<=r['y']+r['height'] for r in await challenge_regions(ctx))
