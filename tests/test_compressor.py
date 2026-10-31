@@ -113,10 +113,10 @@ def test_crushed_file_is_not_legible():
         cv2.putText(img, f"Annual income certificate line {i}", (40, 60 + i * 65), cv2.FONT_HERSHEY_SIMPLEX, 1.0,
                     (0, 0, 0), 2)
     data = cv2.imencode(".png", img)[1].tobytes()
-    # 4 KB forces a tiny, blocky image: the words must be lost.
-    spec = DocSpec(doc_type="*", accepted_types=["jpg"], max_kb=4)
-    try:
-        r = prepare(data, spec)
-    except CannotFit:
-        pytest.skip("could not even reach 4 KB")
+    # A tiny pixel limit squashes the page until the words can't be read.
+    spec = DocSpec(doc_type="*", accepted_types=["jpg"], max_kb=500, max_px=(180, 250))
+    r = prepare(data, spec)
     assert not r.info.legible and r.info.words_after < r.info.words_before
+    # The same page at a sensible size stays legible.
+    ok = prepare(data, DocSpec(doc_type="*", accepted_types=["jpg"], max_kb=500))
+    assert ok.info.legible
