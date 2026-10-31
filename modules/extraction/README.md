@@ -63,7 +63,9 @@ uv sync
 ```
 
 `.env`: `LLM_BASE_URL` and `LLM_API_KEY` (shared with core) and `VISION_MODEL`, a
-vision-capable model on that endpoint.
+vision-capable model on that endpoint. On Groq that is `qwen/qwen3.8-27b` (the same
+model core uses for text); it takes up to 3 images per request, so only the first
+3 pages of a document are read.
 
 ```bash
 uv run python -m modules.extraction.cli fixtures/docs/a_marksheet.jpg --type marksheet

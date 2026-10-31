@@ -28,6 +28,7 @@ from .schemas import FIELDS_BY_TYPE, HELPER_FIELDS, Read, schema_for
 log = logging.getLogger(__name__)
 RETRY_BELOW = 0.6
 RETRY_PAD = 40
+MAX_IMAGES = 3   # Groq's vision models take at most 3 images per request
 
 
 @dataclass
@@ -113,7 +114,9 @@ def extract_pages(raw_pages: list[np.ndarray], doc_type: DocType | None = None, 
     reads: dict[str, tuple[object, str | None, float, list[float] | None]] = {}
     if doc_type in FIELDS_BY_TYPE:
         schema = schema_for(doc_type)
-        answer = vision_json([jpeg_bytes(p.img) for p in pages], extract_prompt(doc_type), schema,
+        if len(pages) > MAX_IMAGES:
+            log.warning("Document has %d pages; reading the first %d", len(pages), MAX_IMAGES)
+        answer = vision_json([jpeg_bytes(p.img) for p in pages[:MAX_IMAGES]], extract_prompt(doc_type), schema,
                              caller="extraction.extract", system=SYSTEM)
         all_lines = [ln for p in pages for ln in p.lines]
         for name in schema.model_fields:

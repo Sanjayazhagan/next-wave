@@ -22,7 +22,7 @@ def _ffmpeg(data: bytes, args: list[str]) -> bytes:
 
 
 def to_wav16k(data: bytes) -> bytes:
-    """Any audio (Telegram OGG/Opus, WhatsApp, MP3) -> 16 kHz mono 16-bit WAV."""
+    """Any audio (Telegram OGG/Opus voice notes, MP3, WAV) -> 16 kHz mono 16-bit WAV."""
     return _ffmpeg(data, ["-ac", "1", "-ar", "16000", "-sample_fmt", "s16", "-f", "wav", "pipe:1"])
 
 
