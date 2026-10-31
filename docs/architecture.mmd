@@ -1,0 +1,15 @@
+flowchart LR
+  U[Citizen on Telegram<br/>@Dakiya_seva_bot or web app] --> G[FastAPI gateway<br/>Telegram webhook, session API]
+  G <--> L[Language service<br/>Bhashini, Sarvam fallback]
+  G --> O[LangGraph orchestrator<br/>pause and resume]
+  O --> X[Document extraction<br/>vision model + OCR agreement]
+  O --> E[Eligibility rule engine<br/>reviewed rules, cited clauses]
+  O --> D[Application doctor]
+  O --> F[File compressor]
+  O --> V[(Encrypted vault)]
+  O --> S[(Skill library)]
+  O --> B[Browser worker<br/>Playwright]
+  B --> P[Government portal]
+  C[Chaos script] -. inject .-> B
+  O -- event stream --> W[Web app]
+  H[Benchmark harness] --> G
