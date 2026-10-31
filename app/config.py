@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     browser_product_mode: Literal["portal", "general"] = "portal"
     # For "general": JSON mapping each portal_id to its start page.
     portal_urls: str = "{}"
+    # The browser service's own ceiling, whatever a form allows. Raise it with the service.
+    browser_upload_max_bytes: int = 1_048_576
 
     # Runs a fake portal and fake extraction, so the loop can be tried end to end.
     use_standins: bool = False

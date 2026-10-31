@@ -1,15 +1,17 @@
 """The connector to browser-product/, against a fake of its v1 API."""
 import base64
+import io
 import json
 from typing import Any
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from app.browser import BrowserError, BrowserSessionLost
 from app.browser_product import BrowserProductWorker
-from contracts.browser import Action, Target
+from contracts.browser import Action, FileRules, Target
 from tests.conftest import FakeLlm, Network
 from tests.test_telegram import BOT_TOKEN, SECRET, TelegramChat
 
@@ -37,11 +39,17 @@ class FakeService:
         self.receipt: str | None = None
         self.approvals = 0
         self.keys: set[str] = set()
+        self.upload = {"mime": "application/pdf", "max_bytes": 1048576}
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
         body = json.loads(request.content) if request.content else {}
         self.keys.add(request.headers.get("X-Internal-Key", ""))
+        if path == "/integration/v1/portals":
+            return httpx.Response(200, json={"portals": [
+                {"id": "another-portal", "application_flow": False},
+                {"id": "mock-scholarship", "application_flow": True, "upload": self.upload},
+            ]})
         if path == "/integration/v1/sessions":
             self.started = body
             return httpx.Response(201, json={"id": "s1", "state": self.state})
@@ -105,6 +113,23 @@ async def answer(worker: BrowserProductWorker, target: Target, submit: Target, v
     await worker.act("s1", Action(type="click", target=submit))
 
 
+def jpeg(size: tuple[int, int] = (300, 200), noise: bool = False) -> bytes:
+    image = Image.effect_noise(size, 90).convert("RGB") if noise else Image.new("RGB", size, "white")
+    output = io.BytesIO()
+    image.save(output, format="JPEG", quality=95)
+    return output.getvalue()
+
+
+def upload_action(data: bytes = b"%PDF-1.4 document", mime_type: str = "application/pdf") -> Action:
+    return Action(
+        type="upload",
+        target=Target(role="file", name="Upload document"),
+        file_base64=base64.b64encode(data).decode(),
+        file_mime=mime_type,
+        file_name="marksheet.pdf",
+    )
+
+
 async def test_full_walk_through_the_portal(
     worker: BrowserProductWorker, service: FakeService
 ) -> None:
@@ -120,8 +145,20 @@ async def test_full_walk_through_the_portal(
     await answer(worker, captcha.input, captcha.submit, ANSWER)
 
     form = await worker.snapshot("s1")
+    assert [node.name for node in form.nodes] == ["Upload document"]
+    assert form.nodes[0].file_rules == FileRules(
+        formats=["application/pdf"], max_bytes=1048576
+    )
+    assert (await worker.act("s1", upload_action())).ok
+
+    form = await worker.snapshot("s1")
     assert [node.name for node in form.nodes] == ["Fill application"]
     await worker.act("s1", Action(type="click", target=Target(role="button", name="Fill application")))
+    sent = service.commands[-1]["payload"]
+    assert set(sent) == {"subject", "source_ref", "file_name", "file_base64"}
+    assert sent["subject"] == service.started["subject"]
+    assert sent["file_name"] == "marksheet.pdf"
+    assert base64.b64decode(sent["file_base64"]) == b"%PDF-1.4 document"
 
     review = await worker.snapshot("s1")
     assert [node.name for node in review.nodes] == ["Final submit"]
@@ -182,6 +219,29 @@ async def test_unreachable_service_is_a_browser_error(make_settings) -> None:
         await worker.open("mock-scholarship", PROFILE)
 
 
+async def at_form(worker: BrowserProductWorker, service: FakeService) -> None:
+    await worker.open("mock-scholarship", PROFILE)
+    service.state = "form_ready"
+
+
+async def test_form_cannot_be_filled_without_a_document(
+    worker: BrowserProductWorker, service: FakeService
+) -> None:
+    await at_form(worker, service)
+    click = Action(type="click", target=Target(role="button", name="Fill application"))
+    result = await worker.act("s1", click)
+    assert result.ok is False
+    assert service.commands == []
+
+
+async def test_a_portal_stating_no_rule_leaves_the_file_alone(
+    worker: BrowserProductWorker, service: FakeService
+) -> None:
+    service.upload = {}
+    await at_form(worker, service)
+    assert (await worker.snapshot("s1")).nodes[0].file_rules == FileRules()
+
+
 async def test_cannot_submit_without_a_review(worker: BrowserProductWorker) -> None:
     result = await worker.act("s1", Action(type="click", target=Target(role="button", name="Final submit")))
     assert result.ok is False
@@ -193,6 +253,7 @@ async def test_unknown_button_fails(worker: BrowserProductWorker) -> None:
 
 
 def full_chat(client: TestClient, network: Network) -> TelegramChat:
+    network.telegram_file = jpeg()
     chat = TelegramChat(client)
     chat.text("/start")
     chat.press("consent:yes")
@@ -231,13 +292,41 @@ def agent_client(make_settings, network: Network, service: FakeService, **overri
 
 
 class PortalModel(FakeLlm):
-    """Plays the model: presses the only button on each page."""
+    """Plays the model: presses the only control on each page."""
 
     def _next_step(self, user: str, nodes: list[dict[str, str]]) -> dict[str, Any]:
         for node in nodes:
+            if node["name"] == "Upload document":
+                return {
+                    "action": "upload", "ref": node["ref"], "document": "marksheet",
+                    "intent": "Attach the marksheet",
+                }
             if node["name"] == "Fill application":
                 return {"action": "click", "ref": node["ref"], "intent": "Fill the application"}
         return {"action": "review", "intent": "Form complete"}
+
+
+@pytest.mark.parametrize(
+    ("upload", "start", "name"),
+    [
+        ({"mime": "application/pdf", "max_bytes": 1048576}, b"%PDF-", "marksheet.pdf"),
+        ({"mime": "image/jpeg", "max_bytes": 40000}, b"\xff\xd8", "marksheet.jpg"),
+        ({"mime": "image/png", "max_bytes": 900000}, b"\x89PNG", "marksheet.png"),
+    ],
+)
+def test_each_portal_decides_what_the_agent_sends(
+    make_settings, network: Network, service: FakeService,
+    upload: dict[str, Any], start: bytes, name: str,
+) -> None:
+    network.llm = PortalModel()
+    service.upload = upload
+    with agent_client(make_settings, network, service) as client:
+        full_chat(client, network)
+        sent = next(c["payload"] for c in service.commands if c["kind"] == "fill")
+        data = base64.b64decode(sent["file_base64"])
+        assert data.startswith(start)
+        assert len(data) <= upload["max_bytes"]
+        assert sent["file_name"] == name
 
 
 def test_agent_stops_at_review_with_the_fields_listed(

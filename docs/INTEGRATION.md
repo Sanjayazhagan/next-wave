@@ -25,7 +25,7 @@ request. That is all. Core imports it on startup, and each function can be sync 
 | # | File | Function | Input and output |
 | --- | --- | --- | --- |
 | 1 | `modules/extraction.py` | `extract(images)` | `list[DocumentImage]` → `ExtractionResult` |
-| 3 | `modules/compressor.py` | `fit_file(data, mime_type, portal_id, document_type)` | `bytes` → `bytes` |
+| 3 | `modules/compressor.py` | `fit_file(data, mime_type, portal_id, document_type)` | `bytes` → `bytes`. Optional better compression: core then fits the result to each form's own rules. |
 | 4 | `modules/rules.py` | `rank_schemes(request)` | `EligibilityRequest` → `EligibilityResponse` |
 | 5 | `modules/doctor.py` | `check_application(request)` | `DoctorRequest` → `DoctorResponse` |
 
@@ -109,8 +109,20 @@ Also needed:
 
 - **Hosting:** the service needs a server with enough memory for Chromium, and possibly
   an Indian location. Confirm that portals load from there.
-- **Document uploads:** v1 takes a PDF under 1 MB in its fill command. The connector does
-  not send one yet.
+- **Document uploads:** forms differ, so no form's rules are in the code. Core reads them
+  from the form, in this order, and sends a file unchanged if it already fits:
+  1. The control's `accept` list, label and description, or the `upload` entry in the
+     service's portal catalog. A browser worker reports these in `PageNode.file_rules`.
+  2. The page text. The model copies the words that apply to that control, code checks
+     they are really on the page, and code reads the numbers.
+  3. The service's own ceiling, in `Snapshot.upload_limits`. In `general` mode this is PDF,
+     JPEG or PNG up to `BROWSER_UPLOAD_MAX_BYTES`, because the service refuses more.
+     **Pranav:** if you raise your 1 MB limit, raise that setting to match.
+
+  Core can convert JPEG, PNG, WebP, HEIC, PDF and Word `.docx` files. A `.docx` keeps its
+  words, tables and images but not its exact layout. It is refused if it holds a chart,
+  an embedded object, or a language no font on the server can print. Old `.doc` files
+  are not supported.
 - **Web app:** set `CORS_ORIGINS` on the server, and use the session API in the README. It
   takes `X-API-Key`. The event stream takes `?key=`.
 

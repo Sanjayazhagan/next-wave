@@ -5,7 +5,8 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from app.assistant import _validated
+from app.assistant import _validated, parse_correction
+from app.states import STATES, indian_state, states_in_message
 from app.graph.messages import QUESTIONS
 from app.graph.nodes import MAX_CHAT_TURNS, indian_rupees
 from tests.conftest import AADHAAR, API_TOKEN, LANGUAGE_URL, Network
@@ -230,12 +231,12 @@ STATE = QUESTIONS[0]
 
 
 def test_unknown_fields_from_the_model_are_ignored() -> None:
-    result = _validated(turn("ok", password="hunter2", state="Goa"), [STATE])
+    result = _validated(turn("ok", password="hunter2", state="Goa"))
     assert result.fields == {"state": "Goa"}
 
 
 def test_invalid_community_is_rejected() -> None:
-    assert _validated(turn("ok", community="Martian"), [COMMUNITY]).fields == {}
+    assert _validated(turn("ok", community="Martian")).fields == {}
 
 
 @pytest.mark.parametrize(
@@ -250,7 +251,7 @@ def test_invalid_community_is_rejected() -> None:
     ],
 )
 def test_short_community_answers_are_understood(answer: str, expected: str) -> None:
-    assert _validated(turn("ok", community=answer), [COMMUNITY]).fields == {
+    assert _validated(turn("ok", community=answer)).fields == {
         "community": expected
     }
 
@@ -347,20 +348,20 @@ def test_rupees_are_grouped_the_indian_way(digits: str, expected: str) -> None:
 
 
 def test_income_is_reduced_to_digits() -> None:
-    assert _validated(turn("ok", annual_income="Rs 1,20,000"), [INCOME]).fields == {
+    assert _validated(turn("ok", annual_income="Rs 1,20,000")).fields == {
         "annual_income": "120000"
     }
 
 
 @pytest.mark.parametrize("value", ["", "  ", "<aadhaar>", "x" * 200, None, ["a"]])
 def test_bad_values_are_rejected(value: Any) -> None:
-    assert _validated({"reply": "ok", "fields": {"state": value}}, [STATE]).fields == {}
+    assert _validated({"reply": "ok", "fields": {"state": value}}).fields == {}
 
 
 @pytest.mark.parametrize("reply", [{}, {"reply": ""}, {"reply": 5}])
 def test_empty_reply_counts_as_a_failure(reply: dict[str, Any]) -> None:
     with pytest.raises(Exception, match="no message"):
-        _validated(reply, [STATE])
+        _validated(reply)
 
 
 def test_no_llm_url_means_fixed_questions(make_client, network: Network) -> None:
@@ -371,3 +372,154 @@ def test_no_llm_url_means_fixed_questions(make_client, network: Network) -> None
     chat.text("/start")
     chat.press("consent:yes")
     assert "Which state" in network.telegram_texts()[-1]
+
+
+@pytest.mark.parametrize(
+    ("written", "expected"),
+    [
+        ("Ap", "Andhra Pradesh"), ("AP", "Andhra Pradesh"), ("tn", "Tamil Nadu"),
+        ("TN.", "Tamil Nadu"), ("as", "Assam"), ("up", "Uttar Pradesh"),
+        ("pondicherry", "Puducherry"), ("தமிழ்நாடு", "Tamil Nadu"), ("Orissa", "Odisha"),
+        ("Narnia", None), ("", None), ("Tamil", None),
+    ],
+)
+def test_states_are_read_exactly(written: str, expected: str | None) -> None:
+    assert indian_state(written) == expected
+
+
+def test_every_state_and_territory_is_listed() -> None:
+    assert len(STATES) == 36
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        ("No tn", ["Tamil Nadu"]),
+        ("i am from Andhra Pradesh", ["Andhra Pradesh"]),
+        ("not from kerala, tn", ["Tamil Nadu"]),
+        ("Chennai la irukken", []),
+        ("I want to study as a doctor", []),
+        ("class 12 in tamil nadu", ["Tamil Nadu"]),
+        ("hi", []),
+    ],
+)
+def test_states_named_in_a_sentence(message: str, expected: list[str]) -> None:
+    assert states_in_message(message) == expected
+
+
+def test_the_model_cannot_guess_a_state_from_a_short_form() -> None:
+    result = _validated(turn("Got it, Assam!", state="Assam"), states_in_message("Ap"))
+    assert result.fields == {"state": "Andhra Pradesh"}
+
+
+def test_a_made_up_place_is_not_stored() -> None:
+    assert _validated(turn("ok", state="Narnia")).fields == {}
+
+
+def test_a_state_is_kept_from_the_user_even_if_the_model_misses_it() -> None:
+    assert _validated(turn("Sorry!"), states_in_message("No tn")).fields == {"state": "Tamil Nadu"}
+
+
+@pytest.mark.parametrize(
+    ("text", "field", "value"),
+    [
+        ("State tn", "state", "Tamil Nadu"),
+        ("No tn", "state", "Tamil Nadu"),
+        ("tn", "state", "Tamil Nadu"),
+        ("Ap", "state", "Andhra Pradesh"),
+        ("1 tn", "state", "Tamil Nadu"),
+        ("no it's kerala", "state", "Kerala"),
+        ("change state to Karnataka", "state", "Karnataka"),
+        ("2 B.E. second year", "course", "B.E. second year"),
+        ("course BSc", "course", "BSc"),
+        ("class 12", "course", "class 12"),
+        ("6th grade", "course", "6th grade"),
+        ("3 120000", "annual_income", "120000"),
+        ("income 3 lakh", "annual_income", "300000"),
+        ("3 lakh", "annual_income", "300000"),
+        ("3lpa", "annual_income", "300000"),
+        ("1.5 lakh", "annual_income", "150000"),
+        ("₹2,50,000", "annual_income", "250000"),
+        ("my income is 90k", "annual_income", "90000"),
+        ("community sc", "community", "SC / ST"),
+        ("no BC", "community", "BC / MBC"),
+    ],
+)
+def test_corrections_people_really_type(text: str, field: str, value: str) -> None:
+    question, saved = parse_correction(text)
+    assert (question.field, saved) == (field, value)
+
+
+@pytest.mark.parametrize("text", ["hello", "state Narnia", "9 120000", "income a lot", "no", ""])
+def test_unclear_corrections_are_not_guessed(text: str) -> None:
+    assert parse_correction(text) is None
+
+
+def wrong_state_chat(chat: TelegramChat, network: Network) -> None:
+    """The exact conversation from the live bot, with the model's real mistakes."""
+    network.llm.chat_replies = [
+        turn("Which state do you live in?"),
+        turn("Got it, Assam! What are you studying?", state="Assam"),
+        turn("Oh, sorry! So you are in Tamil Nadu. What are you studying?", state="Tamil Nadu"),
+        turn("Got it, 6th grade! Family income?", course="6th grade"),
+        turn("Community?", annual_income="300000"),
+        turn("Nandri!", community="BC / MBC"),
+    ]
+    chat.text("/start")
+    chat.press("consent:yes")
+    for message in ("Ap", "No tn", "6th grade", "3lpa", "BC"):
+        chat.text(message)
+
+
+def test_a_correction_during_the_chat_is_really_saved(
+    chat: TelegramChat, telegram_client: TestClient, network: Network
+) -> None:
+    wrong_state_chat(chat, network)
+    assert "1. State: Tamil Nadu" in network.telegram_texts()[-1]
+    assert profile_of(telegram_client)["state"]["value"] == "Tamil Nadu"
+
+
+def test_typing_a_fix_at_the_check_step_saves_it(
+    chat: TelegramChat, telegram_client: TestClient, network: Network
+) -> None:
+    wrong_income_chat(chat, network)
+    chat.text("No tn")
+    assert "1. State: Tamil Nadu" in network.telegram_texts()[-1]
+    assert "Is everything correct?" in network.telegram_texts()[-1]
+    state = profile_of(telegram_client)["state"]
+    assert (state["value"], state["source_document"]) == ("Tamil Nadu", "user_edit")
+
+
+def test_a_natural_fix_works_after_pressing_change(
+    chat: TelegramChat, telegram_client: TestClient, network: Network
+) -> None:
+    wrong_income_chat(chat, network)
+    chat.press("confirm:change")
+    chat.text("State tn")
+    assert "1. State: Tamil Nadu" in network.telegram_texts()[-1]
+
+
+def test_saying_no_at_the_check_step_asks_what_to_change(
+    chat: TelegramChat, network: Network
+) -> None:
+    wrong_income_chat(chat, network)
+    chat.text("no")
+    assert "Reply with the number" in network.telegram_texts()[-1]
+    assert "couldn't read" not in network.telegram_texts()[-1]
+
+
+def test_unclear_text_at_the_check_step_explains_what_to_send(
+    chat: TelegramChat, network: Network
+) -> None:
+    wrong_income_chat(chat, network)
+    chat.text("hmm")
+    assert "couldn't read" in network.telegram_texts()[-1]
+
+
+def test_a_fix_at_the_check_step_never_reaches_the_ai(
+    chat: TelegramChat, network: Network
+) -> None:
+    wrong_income_chat(chat, network)
+    calls = len(network.llm.chat_prompts)
+    chat.text("No tn")
+    assert len(network.llm.chat_prompts) == calls

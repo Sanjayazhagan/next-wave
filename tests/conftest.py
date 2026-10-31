@@ -125,10 +125,11 @@ class Network:
         self.heard_language = "ta"
         self.telegram: list[tuple[str, dict[str, Any]]] = []
         self.telegram_error: str | None = None
+        self.telegram_file = b"telegram-file-bytes"
 
     def _telegram(self, request: httpx.Request) -> httpx.Response:
         if "/file/bot" in request.url.path:
-            return httpx.Response(200, content=b"telegram-file-bytes")
+            return httpx.Response(200, content=self.telegram_file)
         method = request.url.path.rsplit("/", 1)[-1]
         is_json = request.headers.get("content-type", "").startswith("application/json")
         self.telegram.append((method, json.loads(request.content) if is_json else {}))

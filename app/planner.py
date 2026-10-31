@@ -11,12 +11,14 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ValidationError
 
+from app.documents import parse_rules
 from app.llm import ChatLlm
 from app.redact import redact
 from app.skills import SkillStep
-from contracts.browser import PageNode, Snapshot, Target
+from contracts.browser import FileRules, PageNode, Snapshot, Target
 
 MAX_NODES = 300
+MAX_PAGE_TEXT = 6000
 TYPEABLE_ROLES = ("textbox", "searchbox", "combobox", "spinbutton", "textarea")
 FIELD_NAME = re.compile(r"[a-z][a-z0-9_]{0,40}")
 
@@ -31,12 +33,15 @@ NEXT_ACTION_SYSTEM = (
 Choose the single next action towards the goal. Reply with only this JSON:
 {"action": "click|type|upload|wait|review|ask", "ref": "node ref",
  "field": "profile field for type or ask", "document": "document type for upload",
+ "rule_text": "for upload: this control's rules, copied from PAGE TEXT",
  "intent": "short description of this step", "reasoning": "one sentence"}
 Rules for each action:
 - type: only into text inputs, with "field" set to a name from FIELDS.
 - click: only buttons and links. Use it to move to the next page.
 - upload: on the upload control itself, with "document" set to a name from
-  DOCUMENTS. Do not click the upload control.
+  DOCUMENTS. Do not click the upload control. If PAGE TEXT states the file types
+  or size allowed for this control, copy those exact words into "rule_text", and
+  never words about a different upload. Leave it empty if the page states none.
 - ask: only when an input on this page needs something that is not in FIELDS.
   Set "field" to a short snake_case name. Never ask for a name in FIELDS.
 - review: only when the page shows the button that finally submits the
@@ -64,6 +69,8 @@ class PlannedStep(BaseModel):
     ref: str | None = None
     field: str | None = None
     document: str | None = None
+    rule_text: str = ""
+    file_rules: FileRules | None = None  # Set by code, never by the model.
     intent: str = ""
     reasoning: str = ""
 
@@ -132,7 +139,7 @@ class Planner:
         if step.action == "upload":
             if step.document not in documents:
                 raise PlanError("Model chose a document we do not have")
-            return step
+            return step.model_copy(update={"file_rules": _quoted_rules(step, snapshot, known)})
 
         if node.role not in TYPEABLE_ROLES:
             raise PlanError("Model chose to type into something that is not an input")
@@ -180,6 +187,25 @@ def _node_by_ref(snapshot: Snapshot, ref: str | None) -> PageNode:
     raise PlanError("Model pointed at an element that is not on the page")
 
 
+def _page_text(snapshot: Snapshot, known: Mapping[str, str]) -> str:
+    """Only a page with an upload needs this, so others send no more than before."""
+    if not any(node.role == "file" for node in snapshot.nodes):
+        return ""
+    return redact(snapshot.page_text, known)[:MAX_PAGE_TEXT]
+
+
+def _quoted_rules(
+    step: PlannedStep, snapshot: Snapshot, known: Mapping[str, str]
+) -> FileRules | None:
+    """Trust only words really on the page, then read them in code, so a limit
+    the model made up can never be applied. The model only picks which words apply."""
+    quote = " ".join(step.rule_text.split()).lower()
+    page = " ".join(_page_text(snapshot, known).split()).lower()
+    if not quote or quote not in page:
+        return None
+    return parse_rules(quote)
+
+
 def _describe(snapshot: Snapshot, known: Mapping[str, str]) -> str:
     """List page nodes with personal values masked."""
     lines = [
@@ -194,9 +220,11 @@ def _describe(snapshot: Snapshot, known: Mapping[str, str]) -> str:
         )
         for node in snapshot.nodes[:MAX_NODES]
     ]
+    text = _page_text(snapshot, known)
     return "\n".join(
         [f"title: {redact(snapshot.title, known)}", f"url: {_clean_url(snapshot.url)}"]
         + lines
+        + ([f"PAGE TEXT: {text}"] if text else [])
     )
 
 

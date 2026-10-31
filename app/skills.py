@@ -8,7 +8,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from app.db import connect
-from contracts.browser import Target
+from contracts.browser import FileRules, Target
 
 
 class SkillStep(BaseModel):
@@ -19,6 +19,7 @@ class SkillStep(BaseModel):
     target: Target | None = None
     field: str | None = None
     document: str | None = None
+    file_rules: FileRules | None = None  # Numbers only, for upload steps.
     wait_ms: int | None = None
 
 

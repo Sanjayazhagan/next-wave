@@ -21,11 +21,22 @@ class Target(BaseModel):
     name: str
 
 
+class FileRules(BaseModel):
+    """What one upload accepts. Forms differ, and anything left empty is unstated."""
+
+    formats: list[str] = []  # MIME types.
+    min_bytes: int | None = None
+    max_bytes: int | None = None
+    width: int | None = None  # Exact pixels, as photo and signature uploads often ask.
+    height: int | None = None
+
+
 class PageNode(BaseModel):
     ref: str
     role: str
     name: str
     value: str = ""
+    file_rules: FileRules | None = None  # On role "file": what this control states.
 
 
 class Challenge(BaseModel):
@@ -50,6 +61,10 @@ class Snapshot(BaseModel):
     receipt_number: str | None = None
     # Profile field -> label, for portals that fill the form without typing steps.
     managed_fields: dict[str, str] = {}
+    # The visible text, which is where forms tend to state their upload rules.
+    page_text: str = ""
+    # What the browser itself can carry, whatever a form allows.
+    upload_limits: FileRules | None = None
 
     def find(self, target: Target) -> PageNode | None:
         for node in self.nodes:

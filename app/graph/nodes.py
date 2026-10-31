@@ -13,9 +13,10 @@ from typing import Any
 from langgraph.types import interrupt
 from pydantic import ValidationError
 
-from app.assistant import Assistant, clean_answer
+from app.assistant import Assistant, clean_answer, parse_correction
 from app.browser import BrowserError, BrowserSessionLost, BrowserWorker
 from app.config import Settings
+from app.documents import DocumentError, combine, file_name, fit_document
 from app.events import EventLog
 from app.graph import messages
 from app.graph.state import AgentState
@@ -25,6 +26,7 @@ from app.plugins import PluginError, Plugins, call
 from app.redact import mask_for_display, redact
 from app.sessions import SessionStore
 from app.skills import SkillStep, SkillStore
+from app.states import indian_state
 from app.vault import FileStore, Vault
 from contracts.browser import Action, Snapshot
 from contracts.doctor import DoctorRequest, DoctorResponse
@@ -176,25 +178,28 @@ class Nodes:
         answer = chosen(reply) or typed(reply).lower()
         if answer == "yes" or answer in YES_WORDS:
             return {"details_choice": "yes"}
-        return {"details_choice": "change" if answer == "change" else None}
+        if answer == "change" or answer in NO_WORDS:
+            return {"details_choice": "change"}
+        return self._apply_correction(state, typed(reply))
 
-    async def fix_details(self, state: AgentState) -> dict[str, Any]:
-        text = messages.EDIT
-        if state.get("fix_error"):
-            text = f"{messages.EDIT_INVALID} {text}"
-        match = re.fullmatch(r"(\d+)[\s.:)-]+(.+)", typed(ask("fix", text)), re.DOTALL)
-        questions = messages.QUESTIONS
-        if match is None or not 1 <= int(match[1]) <= len(questions):
-            return {"fix_error": True}
-        question = questions[int(match[1]) - 1]
-        value = clean_answer(question, match[2], strict=True)
-        if value is None:
-            return {"fix_error": True}
+    @staticmethod
+    def _apply_correction(state: AgentState, text: str) -> dict[str, Any]:
+        """Save a fix and show the details again, or ask for it in the numbered form."""
+        correction = parse_correction(text)
+        if correction is None:
+            return {"details_choice": "change", "fix_error": True}
+        question, value = correction
         return {
             "fix_error": False,
             "details_choice": None,
             "profile": with_answer(state, question.field, value, "user_edit"),
         }
+
+    async def fix_details(self, state: AgentState) -> dict[str, Any]:
+        text = messages.EDIT
+        if state.get("fix_error"):
+            text = f"{messages.EDIT_INVALID} {text}"
+        return self._apply_correction(state, typed(ask("fix", text)))
 
     async def collect_documents(self, state: AgentState) -> dict[str, Any]:
         file_refs = state.get("file_refs", [])
@@ -248,8 +253,13 @@ class Nodes:
             return {"intake_route": "fallback"}
         language = messages.LANGUAGE_NAMES.get(state.get("language", ""), "English")
         try:
+            have = {
+                field: profile_of(state).fields[field].value
+                for field in answered
+                if field in profile_of(state).fields
+            }
             turn = await self.d.assistant.next_turn(
-                state.get("chat", []), answered, missing, language
+                state.get("chat", []), have, missing, language
             )
         except LlmError as exc:
             log.warning("AI chat fell back to fixed questions: %s", exc)
@@ -260,7 +270,7 @@ class Nodes:
             profile.fields[field] = ProfileField(
                 value=value, source_document="user_answer", confidence=1.0
             )
-        answered = [*answered, *turn.fields]
+        answered = list(dict.fromkeys([*answered, *turn.fields]))
         update: dict[str, Any] = {
             "profile": profile.model_dump(),
             "answered": answered,
@@ -294,6 +304,10 @@ class Nodes:
             value = dict(question.choices).get(chosen(reply) or "") or typed(reply)
             if not value:
                 return {}
+            if question.field == "state":
+                value = indian_state(value)
+                if value is None:
+                    return {}  # Not a place we know, so the question comes round again.
             return {
                 "profile": with_answer(state, question.field, value, "user_answer"),
                 "answered": [*answered, question.field],
@@ -461,8 +475,9 @@ class Nodes:
             target=target,
             field=planned.field,
             document=planned.document,
+            file_rules=planned.file_rules,
         )
-        update = await self._perform(state, step)
+        update = await self._perform(state, step, snapshot)
         if update.get("route") == "again" and update.get("strikes") == 0:
             update["trace"] = [*state.get("trace", []), step.model_dump()]
         return update
@@ -490,9 +505,11 @@ class Nodes:
             repaired = {"steps": new_steps, "skill_repaired": True}
         else:
             self._emit(state, "browser_step", step.intent, "Replaying saved skill")
-        return {**repaired, **await self._perform(state, step)}
+        return {**repaired, **await self._perform(state, step, snapshot)}
 
-    async def _perform(self, state: AgentState, step: SkillStep) -> dict[str, Any]:
+    async def _perform(
+        self, state: AgentState, step: SkillStep, snapshot: Snapshot
+    ) -> dict[str, Any]:
         action = Action(type=step.action, target=step.target, wait_ms=step.wait_ms)
         filled: dict[str, Any] = {}
         if step.action == "type":
@@ -509,8 +526,8 @@ class Nodes:
             }
         elif step.action == "upload":
             try:
-                await self._attach_document(state, step, action)
-            except LookupError as exc:
+                await self._attach_document(state, step, action, snapshot)
+            except (LookupError, DocumentError) as exc:
                 return self._strike(state, str(exc))
         try:
             result = await self.d.browser.act(state["browser_session"], action)
@@ -530,7 +547,7 @@ class Nodes:
         return update
 
     async def _attach_document(
-        self, state: AgentState, step: SkillStep, action: Action
+        self, state: AgentState, step: SkillStep, action: Action, snapshot: Snapshot
     ) -> None:
         file_ref = self._file_for(state, step.document)
         if file_ref is None:
@@ -544,9 +561,15 @@ class Nodes:
                 )
             except PluginError as exc:
                 self._module_failed(state, "compressor", exc)  # Try the original.
+        # Read fresh on every run, because a form can change its rules at any time.
+        control = snapshot.find(step.target) if step.target else None
+        rules = combine(
+            control.file_rules if control else None, step.file_rules, snapshot.upload_limits
+        )
+        data, mime_type = await fit_document(data, mime_type, rules)
         action.file_base64 = base64.b64encode(data).decode()
         action.file_mime = mime_type
-        action.file_name = f"{step.document or 'document'}.{mime_type.rsplit('/', 1)[-1]}"
+        action.file_name = file_name(step.document or "document", mime_type)
 
     @staticmethod
     def _file_for(state: AgentState, document_type: str | None) -> str | None:

@@ -8,7 +8,7 @@ import pytest
 
 from app.browser import BrowserError, BrowserSessionLost
 from app.browser_general import GeneralBrowserWorker, name_of, role_of
-from contracts.browser import Action, Target
+from contracts.browser import Action, FileRules, Target
 
 BASE = "http://browser.test"
 KEY = "service-key"
@@ -58,13 +58,14 @@ class FakeService:
                 "title": "Form",
                 "elements": self.elements,
                 "waiting_human": self.waiting_human,
+                "text": "Photo must be under 50 KB",
                 "screenshot_base64": "aW1n",
             })
         if path == "/contexts/c1":
             if request.method == "DELETE":
                 self.deleted = True
                 return httpx.Response(200, json={})
-            return httpx.Response(200, json={"subject": "agent-x", "state": "active"})
+            return httpx.Response(200, json={"id": "c1", "state": "active"})
         if path == "/contexts/c1/artifacts":
             self.artifacts.append(body)
             return httpx.Response(201, json={"artifact_id": "a1"})
@@ -182,14 +183,68 @@ async def test_typing_into_a_select_uses_select(
 async def test_upload_sends_the_artifact_first(
     worker: GeneralBrowserWorker, service: FakeService
 ) -> None:
+    await worker.open("tn")
     action = Action(
         type="upload", target=Target(role="file", name="Marksheet"),
         file_base64=base64.b64encode(b"pdf").decode(), file_name="m.pdf",
         file_mime="application/pdf",
     )
     assert (await worker.act("c1", action)).ok
-    assert service.artifacts[0]["subject"] == "agent-x"
+    assert service.artifacts[0]["subject"] == service.created["subject"]
     assert service.actions[-1]["artifact_id"] == "a1"
+
+
+async def test_upload_after_a_restart_reopens_the_session(worker: GeneralBrowserWorker) -> None:
+    action = Action(
+        type="upload", target=Target(role="file", name="Marksheet"),
+        file_base64=base64.b64encode(b"pdf").decode(), file_name="m.pdf",
+        file_mime="application/pdf",
+    )
+    with pytest.raises(BrowserSessionLost):
+        await worker.act("c1", action)
+
+
+async def test_each_upload_control_states_its_own_rules(
+    worker: GeneralBrowserWorker, service: FakeService
+) -> None:
+    service.elements = [
+        {"ref": "a", "tag": "input", "type": "file", "label": "Photo",
+         "accept": "image/png,image/jpeg", "description": "Under 50 KB", "risk": "ordinary"},
+        {"ref": "b", "tag": "input", "type": "file", "label": "Certificate (PDF, 2 MB)",
+         "accept": "", "description": "", "risk": "ordinary"},
+        {"ref": "c", "tag": "input", "type": "text", "label": "Name", "risk": "ordinary"},
+    ]
+    photo, certificate, name = (await worker.snapshot("c1")).nodes
+    assert photo.file_rules == FileRules(
+        formats=["image/png", "image/jpeg"], max_bytes=50_000
+    )
+    assert certificate.file_rules == FileRules(formats=["application/pdf"], max_bytes=2_000_000)
+    assert name.file_rules is None
+
+
+async def test_snapshot_passes_on_the_page_text_and_service_limits(
+    worker: GeneralBrowserWorker,
+) -> None:
+    snapshot = await worker.snapshot("c1")
+    assert snapshot.page_text == "Photo must be under 50 KB"
+    assert snapshot.upload_limits.max_bytes == 1_048_576
+
+
+async def test_upload_uses_the_spelling_the_form_lists(
+    worker: GeneralBrowserWorker, service: FakeService
+) -> None:
+    service.elements = [{
+        "ref": "a", "tag": "input", "type": "file", "label": "Marksheet",
+        "accept": ".jpeg", "risk": "ordinary",
+    }]
+    await worker.open("tn")
+    action = Action(
+        type="upload", target=Target(role="file", name="Marksheet"),
+        file_base64=base64.b64encode(b"jpeg").decode(), file_name="m.jpg",
+        file_mime="image/jpeg",
+    )
+    assert (await worker.act("c1", action)).ok
+    assert service.artifacts[0]["file_name"] == "m.jpeg"
 
 
 async def test_missing_element_fails_so_self_repair_can_run(worker: GeneralBrowserWorker) -> None:
