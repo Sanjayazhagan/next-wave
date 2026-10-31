@@ -1,6 +1,7 @@
 """One function per check. Each returns a list of findings (empty when all is well)."""
 from __future__ import annotations
 
+import re
 from datetime import date
 from itertools import combinations
 
@@ -163,6 +164,51 @@ def image_quality(quality_by_doc: dict[str, dict]) -> list[Finding]:
         for flag, word in (("too_blurry", "blurry"), ("too_dark", "too dark")):
             if q.get(flag):
                 out.append(_finding("image_quality", "quality", doc_type, "medium", word, msg.quality(doc_type, word)))
+    return out
+
+
+E_DISTRICT_NO = re.compile(r"^TN-?\d{10,}$", re.I)
+SERVICE_WORDS = {"income": ("income",), "community": ("community", "caste", "backward", "obc", "sc ", "st ", "scheduled")}
+
+
+def _cert_no(s: str) -> str:
+    return re.sub(r"[\s\-]", "", s).upper()
+
+
+def authenticity(docs: list[ExtractedDocument]) -> list[Finding]:
+    """Compare a TN e-District certificate's QR code with its printed text.
+
+    The QR holds the original number and applicant name; an edited printout no longer
+    matches it. Photocopies often blur the QR, so an unreadable QR is only a low note.
+    """
+    out = []
+    for d in docs:
+        if d.document_type not in ("income", "community"):
+            continue
+        f = {k: v.value for k, v in d.fields.items()}
+        status, printed_no = f.get("qr_status"), f.get("certificate_number", "")
+        if status == "decoded":
+            problems = {}
+            qr_no = f.get("qr_certificate_number")
+            if qr_no and printed_no and _cert_no(qr_no) != _cert_no(printed_no):
+                problems["certificate number"] = (qr_no, printed_no)
+            qr_name, printed_name = f.get("qr_name"), f.get("full_name")
+            if qr_name and printed_name and names.compare(qr_name, printed_name)[0] < names.MINOR:
+                problems["name"] = (qr_name, printed_name)
+            service = f" {norm_text(f.get('qr_service', ''))} "
+            if service.strip() and not any(w in service for w in SERVICE_WORDS[d.document_type]):
+                problems["certificate type"] = (f["qr_service"], msg.doc(d.document_type))
+            if problems:
+                detail = "; ".join(f"{k}: QR says '{q}', printed '{p}'" for k, (q, p) in problems.items())
+                out.append(_finding("authenticity", "validity", "certificate_number", "blocker",
+                                    f"QR code doesn't match the printed certificate ({detail})",
+                                    msg.tampered(d.document_type, problems)))
+        elif status == "unreadable" and E_DISTRICT_NO.match(printed_no or ""):
+            out.append(_finding("authenticity", "validity", None, "low", "QR code found but not readable",
+                                msg.qr_unreadable(d.document_type, printed_no)))
+        elif status == "absent" and E_DISTRICT_NO.match(printed_no or ""):
+            out.append(_finding("authenticity", "validity", None, "medium", "no QR code on an e-District certificate",
+                                msg.qr_missing(d.document_type)))
     return out
 
 

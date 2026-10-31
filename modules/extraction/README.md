@@ -45,6 +45,7 @@ upscaled 2x and read again. The better-scoring reading wins.
 | **Mask Aadhaar and bank numbers, before saving or any LLM call** | `mask.redact` |
 | Classify, then one vision call with a per-type schema | `classify.py`, `schemas.py`, `prompts.py` |
 | Score each field, retry weak ones | `confidence.py`, `pipeline.py` |
+| Read the certificate's QR code (income, community) for the tampering check | `qr.py` |
 | Convert to contract types, merge into a profile | `merge.py` |
 
 Masking: 12-digit Aadhaar numbers (even when OCR splits them over 3 words) and
@@ -91,4 +92,7 @@ uv run pytest -m live tests/test_extraction_accuracy.py -s
 
 This writes `reports/extraction_accuracy.json`.
 
-Overall field accuracy: [[NUMBER: from reports/extraction_accuracy.json]]
+Overall field accuracy: **94.7%** (18 of 19 fields) on 3 real certificates: a Cambridge
+A-Level statement and TN e-District income and community certificates, the income one
+a faint photocopy. The one miss was a name on the photocopy. A small sample: add more
+documents for a firmer number.

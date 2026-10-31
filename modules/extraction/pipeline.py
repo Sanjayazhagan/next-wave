@@ -19,6 +19,7 @@ from common.llm import vision_json
 from common.textnorm import norm_amount, norm_category, norm_date, strip_honorifics
 
 from . import confidence, ocr, preprocess
+from .qr import read_qr
 from .classify import classify, jpeg_bytes
 from .mask import mask_text, redact
 from .models import DocResult, DocType, FieldRead, Quality
@@ -136,6 +137,12 @@ def extract_pages(raw_pages: list[np.ndarray], doc_type: DocType | None = None, 
 
     fields = {name: FieldRead(value=v, confidence=c, evidence=e, bbox=b)
               for name, (v, e, c, b) in reads.items() if name not in HELPER_FIELDS and v is not None}
+    if doc_type in ("income", "community"):
+        # What the certificate's QR code says, for the doctor's tampering check.
+        qr = read_qr(raw_pages)
+        fields["qr_status"] = FieldRead(value=qr.status, confidence=1.0)
+        for key, value in qr.values.items():
+            fields[f"qr_{key}"] = FieldRead(value=value, confidence=1.0)
     if len(last4s.get("aadhaar", [])) == 1:
         last4 = last4s["aadhaar"][0]
         fields["aadhaar_last4"] = FieldRead(value=last4, confidence=0.9, evidence="XXXX XXXX " + last4)

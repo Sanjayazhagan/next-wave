@@ -53,5 +53,21 @@ def expired(d: str, until) -> str:
             f"get a fresh one from TN e-District (an e-Sevai centre) and upload it.")
 
 
+def tampered(d: str, problems: dict[str, tuple[str, str]]) -> str:
+    what = " and ".join(problems)
+    return (f"The QR code on your {doc(d)} doesn't match its printed {what}, so the document may have been edited. "
+            f"Upload the original certificate downloaded from TN e-District.")
+
+
+def qr_unreadable(d: str, number: str) -> str:
+    return (f"I couldn't read the QR code on your {doc(d)} to verify it. Upload the original PDF from TN e-District, "
+            f"or verify number {number} at tnedistrict.tn.gov.in.")
+
+
+def qr_missing(d: str) -> str:
+    return (f"Your {doc(d)} has an e-District number but no QR code; genuine e-District certificates carry one. "
+            f"Upload the original certificate downloaded from TN e-District.")
+
+
 def validity(d: str, problem: str) -> str:
     return f"The issue date on your {doc(d)} {problem}. Check the certificate or upload a newer one."

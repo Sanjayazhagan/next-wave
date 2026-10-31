@@ -24,10 +24,22 @@ full breakdown is in `diagnose(...) -> Diagnosis` (`findings`, `points`,
 | 6 | `image_quality` | blurry or dark photo | medium 15 |
 | 7 | `date_validity` | certificate expired (printed validity period has ended) | high 30 |
 |   |  | issue date missing or in the future | low 5 |
+| 8 | `authenticity` | TN e-District QR code compared with the printed certificate number, name and certificate type | blocker if they differ (possible tampering); medium if an e-District certificate has no QR; low if the QR can't be read (photocopies) |
 
 Checks 2 and 3 run only when the chosen scheme has reviewed rules. Checks 4 and
 6 need the prepared files and photo quality, which `DoctorRequest` doesn't carry
 yet; `diagnose()` accepts them when core can pass them.
+
+## Tampering check
+
+TN e-District certificates carry a QR code holding the original application
+number, applicant name and service. Extraction decodes it (`modules/extraction/qr.py`)
+and stores it as `qr_*` fields on the document (not in the profile). If someone
+edits the printed number or name, the QR still holds the original, and the doctor
+flags it as a blocker. Tested on a real OBC certificate: the genuine copy passes;
+a copy with both printed numbers edited is caught. It can't verify documents
+without a QR, and a blurred photocopy's QR may be unreadable; the government's
+online check (tnedistrict.tn.gov.in) has a CAPTCHA, so it isn't automated.
 
 ## Name matching
 

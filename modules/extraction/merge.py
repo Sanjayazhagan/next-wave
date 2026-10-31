@@ -25,6 +25,8 @@ def merge_profile(docs: list[ExtractedDocument], prior: Profile | None = None) -
     merged = dict(prior.fields) if prior else {}
     for doc in docs:
         for key, field in doc.fields.items():
+            if key.startswith("qr_"):   # QR contents describe the document, not the person
+                continue
             cur = merged.get(key)
             if cur is None or (not cur.source_document.startswith("user_") and field.confidence > cur.confidence):
                 merged[key] = field

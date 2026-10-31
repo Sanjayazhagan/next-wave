@@ -30,6 +30,7 @@ def diagnose(profile: Profile, docs: list[ExtractedDocument], scheme=None,
     findings += checks.field_consistency(docs)
     if quality_by_doc:
         findings += checks.image_quality(quality_by_doc)
+    findings += checks.authenticity(docs)
     findings += checks.date_validity(docs, today)
     score = min(100, sum(f.points for f in findings))
     return Diagnosis(scheme_id=getattr(scheme, "scheme_id", None), risk_score=score,

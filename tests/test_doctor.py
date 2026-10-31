@@ -131,3 +131,35 @@ def test_central_obc_asks_for_state_certificate(tmp_path):
     p = Profile(fields={"community": ProfileField(value="OBC", source_document="community", confidence=1.0)})
     f = checks.eligibility_recheck(p, scheme(tmp_path, [COMMUNITY]))
     assert f[0].severity == "medium" and "Tamil Nadu community certificate" in f[0].fix
+
+
+def _cert(doc_type="community", **qr):
+    fields = {"full_name": "Satyajit", "certificate_number": "TN-6202605053287", **qr}
+    return doc(doc_type, **fields)
+
+
+def test_qr_matching_print_is_clean():
+    d = _cert(qr_status="decoded", qr_certificate_number="TN-6202605053287", qr_name="Satyajit",
+              qr_service="OBC Certificate")
+    assert checks.authenticity([d]) == []
+
+
+def test_qr_mismatch_is_flagged_as_possible_tampering():
+    d = _cert(qr_status="decoded", qr_certificate_number="TN-6202605059999", qr_name="Ramesh Kumar",
+              qr_service="OBC Certificate")
+    f = checks.authenticity([d])
+    assert len(f) == 1 and f[0].severity == "blocker" and f[0].check == "authenticity"
+    assert "certificate number and name" in f[0].fix and "may have been edited" in f[0].fix
+
+
+def test_qr_for_a_different_certificate_type():
+    d = _cert("income", qr_status="decoded", qr_certificate_number="TN-6202605053287", qr_name="Satyajit",
+              qr_service="OBC Certificate")
+    assert "certificate type" in checks.authenticity([d])[0].detail
+
+
+def test_unreadable_or_missing_qr_on_e_district_certificate():
+    assert checks.authenticity([_cert(qr_status="unreadable")])[0].severity == "low"
+    assert checks.authenticity([_cert(qr_status="absent")])[0].severity == "medium"
+    other = doc("community", full_name="Satyajit", certificate_number="12/2019", qr_status="absent")
+    assert checks.authenticity([other]) == []
