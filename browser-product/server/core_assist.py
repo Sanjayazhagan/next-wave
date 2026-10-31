@@ -23,6 +23,7 @@ class Offer(BaseModel):
     ttl_seconds: int = Field(default=300,ge=60,le=600)
 
 class Control(BaseModel):
+    observation_id: str | None = None
     kind: str = Field(pattern=r'^(fill|click|challenge_click)$')
     target_ref: str | None=None
     value: str = Field(default='',max_length=100)

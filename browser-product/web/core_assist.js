@@ -15,10 +15,10 @@ async function api(path,method='GET',body){
 }
 function feedback(message){$('#message').textContent=String(message)}
 function append(tag,parent,text,cls){const el=document.createElement(tag);if(cls)el.className=cls;if(text!=null)el.textContent=text;parent.appendChild(el);return el}
-let busy=false;
-async function control(payload){if(busy)return;busy=true;try{await api('control','POST',payload);feedback('Browser updated. Check the result and continue if needed.');await refresh()}catch(err){feedback(err.message)}finally{busy=false}}
+let busy=false,observationId=null;
+async function control(payload){if(busy)return;busy=true;try{await api('control','POST',{...payload,observation_id:observationId});feedback('Browser updated. Check the result and continue if needed.');await refresh()}catch(err){feedback(err.message)}finally{busy=false}}
 async function refresh(){
-  const data=await api('view');expires=data.expires_at||0;viewport=data.viewport||viewport;challengeBoxes=data.challenge_boxes||[];
+  const data=await api('view');observationId=data.observation_id;expires=data.expires_at||0;viewport=data.viewport||viewport;challengeBoxes=data.challenge_boxes||[];
   $('#screen').src='data:image/jpeg;base64,'+data.screenshot_base64;
   $('#url').textContent=data.url;
   const wrap=$('#controls');wrap.replaceChildren();

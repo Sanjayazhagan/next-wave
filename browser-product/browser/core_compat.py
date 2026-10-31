@@ -247,22 +247,28 @@ async def open_session(req:Open,x_internal_key:str|None=Header(None)):
         from browser.general_routes import contexts
         if len(w.sessions)+len(contexts)>=int(os.getenv('MAX_BROWSER_SESSIONS','8')):
             raise HTTPException(429,'Browser capacity reached')
-        context=await w.app.state.browser.new_context(viewport={'width':1180,'height':760},accept_downloads=False)
-        page=await context.new_page()
-        session=GeneralContext(context=context,page=page,allowed=allowed,public_web=dynamic)
-        await context.route('**/*',session.route)
+        context=None
         try:
+            context=await w.app.state.browser.new_context(viewport={'width':1180,'height':760},accept_downloads=False)
+            page=await context.new_page()
+            session=GeneralContext(context=context,page=page,allowed=allowed,public_web=dynamic)
+            await context.route('**/*',session.route)
             await page.goto(requested,wait_until='domcontentloaded',timeout=20000)
             await observe(session)
-        except PWTimeout as exc:
-            await context.close()
-            raise HTTPException(504,'Browser navigation timed out. Run scripts/diagnose_browser_navigation.py inside worker to distinguish network, DNS, blocked requests and DOM readiness') from exc
-        except PWError as exc:
-            await context.close()
-            reason='environment_blocked_by_admin' if 'ERR_BLOCKED_BY_ADMINISTRATOR' in str(exc) else 'network_or_browser_failure'
-            raise HTTPException(502,f'Browser navigation failed: {reason}; check worker navigation diagnostics') from exc
-        except Exception:
-            await context.close();raise
+        except Exception as exc:
+            failure_ref=uuid.uuid4().hex[:12]
+            reason='unexpected_browser_failure';status=502
+            if isinstance(exc,PWTimeout):reason='navigation_timeout';status=504
+            elif isinstance(exc,PWError):
+                for token,category in [('ERR_BLOCKED_BY_ADMINISTRATOR','environment_blocked_by_admin'),('ERR_NAME_NOT_RESOLVED','dns_failure'),('ERR_CERT','tls_failure'),('ERR_CONNECTION','connection_failure')]:
+                    if token in str(exc):reason=category;break
+            if context is not None:
+                try:await context.close()
+                except Exception:pass
+            import logging
+            logging.getLogger(__name__).warning('browser_open_failed ref=%s reason=%s active_contexts=%d',failure_ref,reason,len(contexts))
+            if isinstance(exc,HTTPException):raise
+            raise HTTPException(status,f'Browser open failed: {reason}; reference={failure_ref}. Run worker navigation diagnostics.') from None
         contexts[session.id]=session
         sid=secrets.token_urlsafe(24)
         bridges[sid]=BridgeSession(context_id=session.id,portal_id=req.portal_id or 'dynamic-public-web',
@@ -465,17 +471,31 @@ async def challenge_regions(ctx):
     """Only human-auth challenge surfaces, never arbitrary screenshot clicks."""
     boxes=[]
     for frame in ctx.page.frames[1:]:
-        if not re.search(r'captcha|recaptcha|hcaptcha|turnstile',frame.url,re.I):continue
         try:
-            region=await (await frame.frame_element()).bounding_box()
+            element=await frame.frame_element()
+            identity=await element.evaluate("e=>[e.id,e.title,e.name,e.getAttribute('aria-label'),e.getAttribute('src')].join(' ')")
+            if not re.search(r'captcha|recaptcha|hcaptcha|turnstile',frame.url+' '+identity,re.I):continue
+            region=await element.bounding_box()
             if region: boxes.append(region)
         except Exception:pass
-    for locator in [ctx.page.locator('img[alt*="captcha" i],img[src*="captcha" i],img[aria-label*="captcha" i],img[alt*="verification" i],img[alt*="security code" i],canvas[aria-label*="captcha" i],[role=img][aria-label*="captcha" i]')]:
-        try:
-            for i in range(min(await locator.count(),8)):
-                region=await locator.nth(i).bounding_box()
-                if region:boxes.append(region)
-        except Exception:pass
+    # Sites often serve CAPTCHA pixels from blob/data URLs; use DOM identity,
+    # accessible labels and associated verification fields, not URL alone.
+    for frame in ctx.page.frames:
+        if frame != ctx.page.main_frame and not ctx.permitted(frame.url):
+            continue
+        locator=frame.locator('img,canvas,[role=img]')
+        for i in range(min(await locator.count(),100)):
+            image=locator.nth(i)
+            try:
+                marked=await image.evaluate(r"""e=>{
+                  const own=[e.id,e.className,e.getAttribute('alt'),e.getAttribute('title'),e.getAttribute('aria-label'),e.getAttribute('src')].join(' ');
+                  if(/captcha|human[ _-]?verification|security[ _-]?(?:image|challenge)/i.test(own))return true;
+                  const group=e.closest('label,fieldset,[role=group]')||e.parentElement;
+                  return !!group && /captcha|human verification/i.test(group.innerText||'') && !!group.querySelector('input');
+                }""")
+                region=await image.bounding_box() if marked and await image.is_visible() else None
+                if region and region['width']>0 and region['height']>0:boxes.append(region)
+            except Exception:pass
     return boxes
 
 
@@ -484,6 +504,7 @@ class HumanBegin(BaseModel):
     expires_at: float | None = None
 
 class HumanAction(BaseModel):
+    observation_id: str | None = None
     task_id: str = Field(min_length=8,max_length=100)
     kind: str
     target_ref: str | None = None
@@ -531,6 +552,10 @@ async def human_act(sid:str,req:HumanAction,x_internal_key:str|None=Header(None)
     worker().require_key(x_internal_key)
     info,ctx=get(sid);ensure_human(info,req.task_id)
     async with ctx.lock:
+        if req.observation_id:
+            fingerprint,*_=await signature(ctx)
+            if req.observation_id!=ctx.observation_id or fingerprint!=ctx.fingerprint:
+                raise HTTPException(409,'Verification page changed; refresh before interacting')
         obs=await observe(ctx)
         e=next((c for c in obs['elements'] if c['ref']==req.target_ref),None)
         if req.kind=='fill':
