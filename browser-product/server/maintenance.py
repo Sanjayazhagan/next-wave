@@ -16,6 +16,12 @@ async def sweep(app, at=None):
     initialize_browser()
     from server.conversation_bridge import initialize as initialize_conversation,expire
     initialize_conversation();expire()
+    from server.core_assist import database
+    database()
+    with app.conn() as db:
+        db.execute("UPDATE core_assist_tasks SET state='expired' WHERE expires<? AND state IN ('offering','active','completing','needs_reconciliation')",(at.timestamp(),))
+        db.execute('DELETE FROM core_assist_tasks WHERE expires<?',(at.timestamp()-30*86400,))
+        db.execute('DELETE FROM audit WHERE at<? AND session_id NOT IN (SELECT id FROM sessions UNION SELECT id FROM browser_contexts)',(cutoff,))
     deleted = 0
     with app.conn() as db:
         db.execute("UPDATE human_tasks SET state='expired', bearer_hash=NULL WHERE expires<? AND state IN ('offered','claimed')", (at.timestamp(),))

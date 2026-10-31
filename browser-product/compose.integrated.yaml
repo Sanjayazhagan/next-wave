@@ -4,6 +4,7 @@
 services:
   api:
     environment:
+      DEMO_HOST: ${DEMO_HOST:-}
       APP_MODE: integrated
       SECURITY_MODE: signed
       INTERNAL_KEY: ${INTERNAL_KEY:?Set random INTERNAL_KEY}
@@ -15,6 +16,9 @@ services:
       BROWSER_PORTALS_JSON: ${BROWSER_PORTALS_JSON:-}
   worker:
     environment:
+      MAX_BROWSER_TABS: ${MAX_BROWSER_TABS:-8}
+      MAX_BROWSER_SESSIONS: ${MAX_BROWSER_SESSIONS:-8}
+      MAX_BROWSER_IDLE_SECONDS: ${MAX_BROWSER_IDLE_SECONDS:-900}
       APP_MODE: integrated
       INTERNAL_KEY: ${INTERNAL_KEY:?Set random INTERNAL_KEY}
       APP_SIGNING_KEY: ${APP_SIGNING_KEY:?Set distinct signing key}

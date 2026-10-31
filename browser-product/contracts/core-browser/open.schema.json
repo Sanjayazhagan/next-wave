@@ -1,0 +1,48 @@
+{
+  "properties": {
+    "portal_id": {
+      "anyOf": [
+        {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Portal Id"
+    },
+    "url": {
+      "anyOf": [
+        {
+          "maxLength": 2000,
+          "minLength": 10,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Url"
+    },
+    "consent_ref": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "minLength": 8,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Consent Ref"
+    }
+  },
+  "title": "Open",
+  "type": "object"
+}

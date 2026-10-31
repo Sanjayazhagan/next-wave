@@ -146,6 +146,7 @@ async def test_document_post_permission_is_exact_target_and_single_click(monkeyp
         ('https://attacker.test/upload','POST','blocked'),
         ('https://upload.test/upload?final_submit=true','POST','blocked'),
     ]:
+        context.write_scope=(origin('https://upload.test/secure'),'upload_form','https://upload.test/upload')
         req=Route(url,method)
         await context.route(req)
         assert req.decision==expected,(url,method,req.decision)

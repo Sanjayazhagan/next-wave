@@ -7,3 +7,10 @@ data/
 .venv/
 .uv-cache/
 output/
+
+browser-test-results/
+form-result.jpg
+
+.env.*
+!.env.example
+!.env.vm.example

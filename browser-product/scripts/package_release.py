@@ -8,7 +8,7 @@ import zipfile
 def package():
     root=Path(__file__).resolve().parents[1];out=root/'output'/'release';out.mkdir(parents=True,exist_ok=True)
     folders=('browser','server','web','clients','contracts','deploy','docs','scripts','tests','.github')
-    names=('README.md','AGENTS.md','requirements.txt','requirements.lock','pyproject.toml','Dockerfile','compose.yaml','compose.vm.yaml','.env.example','.env.vm.example','.dockerignore','.gitignore','start-local.cmd')
+    names=('README.md','AGENTS.md','requirements.txt','requirements.lock','pyproject.toml','Dockerfile','compose.yaml','compose.vm.yaml','compose.integrated.yaml','.env.example','.env.vm.example','.dockerignore','.gitignore','start-local.cmd')
     files=[]
     for folder in folders:
         for p in (root/folder).rglob('*'):

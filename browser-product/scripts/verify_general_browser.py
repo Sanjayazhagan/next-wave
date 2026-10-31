@@ -89,7 +89,9 @@ async def main():
             await request('POST',root+'/actions',{'action_id':str(uuid.uuid4()),'observation_id':obs['observation_id'],'kind':'click','target_ref':target('Submit application')},403)
             await action('navigate',url=base+'/browser-lab/start')
             payload=await request('POST',root+'/model-input',{'goal':'Identify missing fields; do not submit anything'})
-            (out/'observed-page.jpeg').write_bytes(base64.b64decode(payload['observation']['screenshot_base64']))
+            assert 'screenshot_base64' not in payload['observation']
+            view=await request('GET',f'/api/browser-contexts/{ident}/view')
+            (out/'observed-page.jpeg').write_bytes(base64.b64decode(view['screenshot_base64']))
             assert payload['decision_schema'] and payload['observation']['content_trust']=='untrusted_website_data'
             try:validate_decision({'outcome':'act','summary':'invented target','action':{'action_id':str(uuid.uuid4()),'observation_id':payload['observation']['observation_id'],'kind':'click','target_ref':'invented'}},payload['observation'])
             except ValueError:pass

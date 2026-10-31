@@ -4,8 +4,10 @@ Lives on the PRIVATE worker at /core/session. The public browser API proxies thi
 under /core-browser/session with service authentication. This does not embed an
 LLM: next-wave/app/planner.py makes every agent decision.
 """
+import asyncio
 import base64
 import hashlib
+import hmac
 import json
 import os
 import re
@@ -19,7 +21,7 @@ from fastapi import APIRouter, Header, HTTPException
 from playwright.async_api import TimeoutError as PWTimeout, Error as PWError
 from pydantic import BaseModel, Field
 
-from browser.general import GeneralContext, observe, act, origin, signature, intermediate_post_permitted
+from browser.general import GeneralContext, observe, act, origin, signature, intermediate_post_permitted, bound_tabs
 from browser.step_policy import category, final_path
 from browser.public_web import navigation_mode, NAV_MODE_PUBLIC, assert_public_url
 from browser.general_routes import contexts
@@ -42,6 +44,7 @@ class Target(BaseModel):
     name: str
 
 class CoreAction(BaseModel):
+    action_id: str | None = Field(default=None,min_length=8,max_length=100)
     type: str
     target: Target | None = None
     value: str | None = None
@@ -69,6 +72,10 @@ class BridgeSession:
     approval_refs: set[str] = field(default_factory=set)
     auth_target: str | None = None
     auth_value_entered: bool = False
+    auth_ref: str | None = None
+    actions: dict = field(default_factory=dict)
+    uncertain_action: str | None = None
+    effect_started: bool = False
     last_action: str = ''
     receipt_pattern: str | None = None
     human_task_id: str | None = None
@@ -78,6 +85,7 @@ class BridgeSession:
     otp_verify_count: int = 0
 
 bridges: dict[str, BridgeSession] = {}
+ACTION_HASH_KEY=secrets.token_bytes(32)
 
 
 def worker():
@@ -249,13 +257,15 @@ async def open_session(req:Open,x_internal_key:str|None=Header(None)):
             raise HTTPException(429,'Browser capacity reached')
         context=None
         try:
-            context=await w.app.state.browser.new_context(viewport={'width':1180,'height':760},accept_downloads=False)
+            context=await w.app.state.browser.new_context(viewport={'width':1180,'height':760},accept_downloads=False,service_workers='block')
             page=await context.new_page()
             session=GeneralContext(context=context,page=page,allowed=allowed,public_web=dynamic)
+            bound_tabs(session)
             await context.route('**/*',session.route)
+            await context.route_web_socket('**/*',lambda socket:socket.close())
             await page.goto(requested,wait_until='domcontentloaded',timeout=20000)
             await observe(session)
-        except Exception as exc:
+        except BaseException as exc:
             failure_ref=uuid.uuid4().hex[:12]
             reason='unexpected_browser_failure';status=502
             if isinstance(exc,PWTimeout):reason='navigation_timeout';status=504
@@ -267,7 +277,7 @@ async def open_session(req:Open,x_internal_key:str|None=Header(None)):
                 except Exception:pass
             import logging
             logging.getLogger(__name__).warning('browser_open_failed ref=%s reason=%s active_contexts=%d',failure_ref,reason,len(contexts))
-            if isinstance(exc,HTTPException):raise
+            if not isinstance(exc,Exception) or isinstance(exc,HTTPException):raise
             raise HTTPException(status,f'Browser open failed: {reason}; reference={failure_ref}. Run worker navigation diagnostics.') from None
         contexts[session.id]=session
         sid=secrets.token_urlsafe(24)
@@ -312,139 +322,175 @@ async def login(sid:str,req:Login,x_internal_key:str|None=Header(None)):
 async def authorize(sid:str,req:Authorization,x_internal_key:str|None=Header(None)):
     worker().require_key(x_internal_key)
     info,ctx=get(sid)
-    if not req.approved:raise HTTPException(403,'Explicit citizen approval required')
-    if req.review_observation_id != info.observation_id:
-        raise HTTPException(409,'Review observation changed; a fresh citizen approval is required')
-    if req.approval_ref in info.approval_refs:
-        raise HTTPException(409,'Approval reference has already been used; new citizen review required')
-    info.approval_refs.add(req.approval_ref)
-    info.approval=(req.approval_ref,info.observation_id,time.time()+120)
-    info.consumed=False
-    return {'authorized':True,'expires_in':120}
-
+    async with ctx.lock:
+        if contexts.get(info.context_id) is not ctx:raise HTTPException(404,'Browser context closed')
+        if not req.approved:raise HTTPException(403,'Explicit citizen approval required')
+        if req.review_observation_id != info.observation_id:
+            raise HTTPException(409,'Review observation changed; a fresh citizen approval is required')
+        if req.approval_ref in info.approval_refs:
+            raise HTTPException(409,'Approval reference has already been used; new citizen review required')
+        info.approval_refs.add(req.approval_ref)
+        info.approval=(req.approval_ref,info.observation_id,time.time()+120)
+        info.consumed=False
+        return {'authorized':True,'expires_in':120}
 
 @router.post('/session/{sid}/action')
 async def action(sid:str,req:CoreAction,x_internal_key:str|None=Header(None)):
     worker().require_key(x_internal_key)
     info,ctx=get(sid)
+    if worker().MODE=='integrated' and not req.action_id:
+        raise HTTPException(422,'action_id is required in integrated mode; retain it when retrying the same request')
     async with ctx.lock:
-        if info.human_task_id and info.human_expires<=time.time():
-            info.human_task_id=None;ctx.human_captcha_until=0.0
-        if info.human_task_id:
-            raise HTTPException(409,'Human assistance owns this browser session; wait for completion')
-        # Trust ONLY currently observed target names and the exact DOM state
-        # presented to the planner. A page transition between snapshot and
-        # action is a hard stop, not a reason to guess a selector.
-        current_fingerprint,_,_,_,_=await signature(ctx)
-        if info.fingerprint and current_fingerprint != info.fingerprint:
-            raise HTTPException(409,'Page changed since the core snapshot; reobserve and replan')
-        e_ref=info.nodes.get((req.target.role,req.target.name)) if req.target else None
-        if req.target and not e_ref:raise HTTPException(409,'Target no longer observed; take a new snapshot')
-        # Manual authentication is the ONLY credential-changing exception to
-        # general autonomous actions; core has already obtained a human reply.
-        observation=await observe(ctx)
-        # Observe refreshes the UUID. Verify the previous page's control
-        # fingerprint by checking actual exposed refs and labels, not UUID.
-        e=next((x for x in observation['elements'] if x['ref']==e_ref),None)
-        if req.target and (not e or (req.target.name.split(' [')[0] != identify(e))):
-            raise HTTPException(409,'Target changed; re-plan using a new snapshot')
-        kind={'click':'click','type':'fill','upload':'upload','wait':'wait','navigate':'navigate'}.get(req.type)
-        if not kind:raise HTTPException(422,'Unsupported core action')
-        if req.type=='type' and e and e['tag']=='select':kind='select'
-        if req.type=='type' and e and e['risk']=='human_auth':
-            if not human_kind(e):raise HTTPException(403,'Authentication step requires human control')
-            # OTP/CAPTCHA provided via the trusted core's paused citizen reply.
-            await ctx.targets[e_ref].fill(req.value or '')
-            info.auth_value_entered=True
-            after=await observe(ctx)
-            convert(after,info)
-            info.fingerprint=ctx.fingerprint
-            return {'ok':True}
-        if req.type=='click' and e and e['risk']!='ordinary':
-            label=identify(e)
-            intent=e.get('category','ordinary')
-            if final_control(e):
-                approval=info.approval
-                if not approval or info.consumed or approval[2]<time.time():
-                    raise HTTPException(403,'Submission requires unexpired citizen approval from core')
-                if info.observation_id!=approval[1]:raise HTTPException(409,'Review changed; reapprove before submitting')
-                if os.getenv('BROWSER_ENABLE_FINAL_SUBMIT','false').lower()!='true':
-                    raise HTTPException(403,'Final submission is disabled by operator policy')
-                # A generic form is NOT a validated application adapter. Its
-                # network write may still be blocked by route() on public-web.
-                info.consumed=True
-                await ctx.targets[e_ref].click(timeout=8000)
-                after=await observe(ctx);convert(after,info);info.fingerprint=ctx.fingerprint
-                return {'ok':True}
-            if intent == 'otp_send':
-                # No model-driven repeat flood. Core holds a consent-backed
-                # session, but further requests require new user supervision.
-                now=time.time()
-                if now-info.otp_window>600:info.otp_window=now;info.otp_sent=0
-                if info.otp_sent>=2:raise HTTPException(429,'OTP request limit reached; pause for human assistance')
-                if not re.search(r'otp|login|verification|sign in|sign-in',observation.get('text',''),re.I):
-                    raise HTTPException(403,'OTP request not supported by current page context')
-                info.otp_sent+=1
-                await scoped_interaction(ctx,ctx.targets[e_ref],intent)
-                after=await observe(ctx);convert(after,info);info.fingerprint=ctx.fingerprint
-                return {'ok':True,'kind':'otp_request','requires_human_otp':True}
-            if intent=='otp_verify' and info.auth_value_entered:
-                info.auth_value_entered=False
-                await scoped_interaction(ctx,ctx.targets[e_ref],intent)
-                after=await observe(ctx);convert(after,info);info.fingerprint=ctx.fingerprint
-                return {'ok':True,'kind':'auth_verification','verified':False}
-            if intent=='upload_step':
-                # Verify the file belongs to THIS form. Attaching a file to
-                # an unrelated input must never unlock a Submit button.
-                attached=any(c.get('type')=='file' and c.get('file_count',0)>0
-                             and c.get('form_index',-1)==e.get('form_index')
-                             and c.get('frame_id')==e.get('frame_id')
-                             for c in observation['elements'])
-                if not attached:
-                    raise HTTPException(409,'Attach a document to this upload form before clicking Upload')
-                if e.get('form_upload_only'):
-                    # Only a dedicated file-only POST with a positive upload
-                    # endpoint can run without an operator-review wildcard.
-                    # The request interceptor permits that exact POST URL for
-                    # this click and still blocks final/application paths.
-                    await scoped_interaction(ctx,ctx.targets[e_ref],'upload_form',post_target=e['form_action'])
-                else:
-                    if not intermediate_post_permitted(ctx.page.url,public_web=ctx.public_web):
-                        raise HTTPException(403,'Upload action requires an operator-reviewed intermediate POST origin or human assistance')
-                    await ctx.targets[e_ref].click(timeout=8000)
-                after=await observe(ctx);convert(after,info);info.fingerprint=ctx.fingerprint
-                return {'ok':True,'kind':'document_upload_step','confirmed_by_portal':False}
-            raise HTTPException(403,'Sensitive action requires human assistance or a reviewed portal adapter')
-        if req.type=='upload':
-            if not e or e.get('type')!='file':
-                raise HTTPException(422,'Upload action requires an observed file input; use the fileupload role')
-            import base64
-            try:raw=base64.b64decode(req.file_base64 or '',validate=True)
-            except Exception:raise HTTPException(422,'Invalid uploaded document encoding')
-            if len(raw)>1048576:raise HTTPException(413,'Prepared document exceeds current upload limit')
-            mime=req.file_mime or 'application/pdf'
-            if mime=='application/pdf' and not raw.startswith(b'%PDF-'):
-                raise HTTPException(422,'Invalid PDF')
-            if mime not in ('application/pdf','image/png','image/jpeg'):
-                raise HTTPException(422,'Unsupported document MIME')
-            upload={'name':req.file_name or 'document.pdf','mimeType':mime,'buffer':raw}
-        else:upload=None
-        command=BrowserAction(action_id=str(uuid.uuid4()),observation_id=observation['observation_id'],
-                kind=kind,target_ref=e_ref,value=req.value or '',url=req.url or '',
-                verified=req.type in ('type','upload'),source_ref='core:verified-profile' if req.type in ('type','upload') else None,
-                timeout_ms=max(100,min(req.wait_ms or 5000,15000)))
+        if contexts.get(info.context_id) is not ctx:raise HTTPException(404,'Browser context was closed')
+        if info.uncertain_action:raise HTTPException(409,'Previous core action outcome unknown; inspect and reconcile before reopening a session')
+        info.effect_started=False
+        fingerprint=hmac.new(ACTION_HASH_KEY,req.model_dump_json().encode(),hashlib.sha256).hexdigest()
+        if req.action_id:
+            prior=info.actions.get(req.action_id)
+            if prior:
+                if prior['fingerprint']!=fingerprint:raise HTTPException(409,'Action ID reused with different input')
+                if prior['result'] is None:raise HTTPException(409,'Action outcome unknown; reconcile before issuing another action')
+                return {**prior['result'],'replayed':True}
+            if len(info.actions)>=1000:raise HTTPException(429,'Session action ledger full; close and reconcile the session')
+            info.actions[req.action_id]={'fingerprint':fingerprint,'result':None}
         try:
-            result=await act(ctx,command,upload)
+            result=await action_locked(sid,req,info,ctx)
         except HTTPException as exc:
-            if exc.status_code in (403,409,422):raise
-            return {'ok':False,'error':str(exc.detail)}
-        info.observation_id=result['observation']['observation_id']
-        # Update role/name mapping based on observed post-action page so next
-        # core action can be grounded without waiting on a forced observation.
-        convert(result['observation'],info)
+            if info.effect_started:info.uncertain_action=req.action_id or 'legacy-action'
+            # Only clearly pre-action staleness is safe to plan afresh.
+            if req.action_id and not info.effect_started:
+                info.actions.pop(req.action_id,None)
+            raise
+        except BaseException:
+            if info.effect_started:info.uncertain_action=req.action_id or 'legacy-action'
+            raise
+        if req.action_id:info.actions[req.action_id]['result']=result
+        return result
+
+async def action_locked(sid,req,info,ctx):
+    expire_human(info,ctx)
+    if info.human_task_id:
+        raise HTTPException(409,'Human assistance owns this browser session; wait for completion')
+    # Trust ONLY currently observed target names and the exact DOM state
+    # presented to the planner. A page transition between snapshot and
+    # action is a hard stop, not a reason to guess a selector.
+    current_fingerprint,_,_,_,_=await signature(ctx)
+    if info.fingerprint and current_fingerprint != info.fingerprint:
+        raise HTTPException(409,'Page changed since the core snapshot; reobserve and replan')
+    e_ref=info.nodes.get((req.target.role,req.target.name)) if req.target else None
+    if req.target and not e_ref:raise HTTPException(409,'Target no longer observed; take a new snapshot')
+    # Manual authentication is the ONLY credential-changing exception to
+    # general autonomous actions; core has already obtained a human reply.
+    observation=await observe(ctx)
+    # Observe refreshes the UUID. Verify the previous page's control
+    # fingerprint by checking actual exposed refs and labels, not UUID.
+    e=next((x for x in observation['elements'] if x['ref']==e_ref),None)
+    if req.target and (not e or (req.target.name != identify(e) and not (req.target.name.startswith(str(identify(e))+' [') and re.fullmatch(r' \[\d+\]',req.target.name[len(str(identify(e))):])))):
+        raise HTTPException(409,'Target changed; re-plan using a new snapshot')
+    kind={'click':'click','type':'fill','upload':'upload','wait':'wait','navigate':'navigate'}.get(req.type)
+    if not kind:raise HTTPException(422,'Unsupported core action')
+    if req.type=='type' and e and e['tag']=='select':kind='select'
+    if req.type=='type' and e and e['risk']=='human_auth':
+        if not human_kind(e):raise HTTPException(403,'Authentication step requires human control')
+        # OTP/CAPTCHA provided via the trusted core's paused citizen reply.
+        info.effect_started=True
+        await ctx.targets[e_ref].fill(req.value or '')
+        info.auth_value_entered=True;info.auth_ref=e_ref
+        after=await observe(ctx)
+        convert(after,info)
         info.fingerprint=ctx.fingerprint
         return {'ok':True}
-
+    if req.type=='click' and e and e['risk']!='ordinary':
+        label=identify(e)
+        intent=e.get('category','ordinary')
+        if final_control(e):
+            approval=info.approval
+            if not approval or info.consumed or approval[2]<time.time():
+                raise HTTPException(403,'Submission requires unexpired citizen approval from core')
+            if info.observation_id!=approval[1]:raise HTTPException(409,'Review changed; reapprove before submitting')
+            if os.getenv('BROWSER_ENABLE_FINAL_SUBMIT','false').lower()!='true':
+                raise HTTPException(403,'Final submission is disabled by operator policy')
+            # A generic form is NOT a validated application adapter. Its
+            # network write may still be blocked by route() on public-web.
+            info.consumed=True
+            info.effect_started=True
+            await ctx.targets[e_ref].click(timeout=8000)
+            after=await observe(ctx);convert(after,info);info.fingerprint=ctx.fingerprint
+            return {'ok':True}
+        if intent == 'otp_send':
+            # No model-driven repeat flood. Core holds a consent-backed
+            # session, but further requests require new user supervision.
+            now=time.time()
+            if now-info.otp_window>600:info.otp_window=now;info.otp_sent=0
+            if info.otp_sent>=2:raise HTTPException(429,'OTP request limit reached; pause for human assistance')
+            if not re.search(r'otp|login|verification|sign in|sign-in',observation.get('text',''),re.I):
+                raise HTTPException(403,'OTP request not supported by current page context')
+            info.otp_sent+=1
+            info.effect_started=True
+            await scoped_interaction(ctx,ctx.targets[e_ref],intent)
+            after=await observe(ctx);convert(after,info);info.fingerprint=ctx.fingerprint
+            return {'ok':True,'kind':'otp_request','requires_human_otp':True}
+        if intent=='otp_verify' and info.auth_value_entered:
+            auth=next((c for c in observation['elements'] if c['ref']==info.auth_ref),None)
+            if not auth or (auth.get('frame_id'),auth.get('form_index'))!=(e.get('frame_id'),e.get('form_index')):raise HTTPException(403,'Verification value belongs to a different form')
+            verify_attempt(info)
+            info.auth_value_entered=False;info.auth_ref=None
+            info.effect_started=True
+            await scoped_interaction(ctx,ctx.targets[e_ref],intent)
+            after=await observe(ctx);convert(after,info);info.fingerprint=ctx.fingerprint
+            return {'ok':True,'kind':'auth_verification','verified':False}
+        if intent=='upload_step':
+            # Verify the file belongs to THIS form. Attaching a file to
+            # an unrelated input must never unlock a Submit button.
+            attached=any(c.get('type')=='file' and c.get('file_count',0)>0
+                         and c.get('form_index',-1)==e.get('form_index')
+                         and c.get('frame_id')==e.get('frame_id')
+                         for c in observation['elements'])
+            if not attached:
+                raise HTTPException(409,'Attach a document to this upload form before clicking Upload')
+            if e.get('form_upload_only'):
+                # Only a dedicated file-only POST with a positive upload
+                # endpoint can run without an operator-review wildcard.
+                # The request interceptor permits that exact POST URL for
+                # this click and still blocks final/application paths.
+                info.effect_started=True
+                await scoped_interaction(ctx,ctx.targets[e_ref],'upload_form',post_target=e['form_action'])
+            else:
+                if not intermediate_post_permitted(ctx.page.url,public_web=ctx.public_web):
+                    raise HTTPException(403,'Upload action requires an operator-reviewed intermediate POST origin or human assistance')
+                info.effect_started=True
+                await ctx.targets[e_ref].click(timeout=8000)
+            after=await observe(ctx);convert(after,info);info.fingerprint=ctx.fingerprint
+            return {'ok':True,'kind':'document_upload_step','confirmed_by_portal':False}
+        raise HTTPException(403,'Sensitive action requires human assistance or a reviewed portal adapter')
+    if req.type=='upload':
+        if not e or e.get('type')!='file':
+            raise HTTPException(422,'Upload action requires an observed file input; use the fileupload role')
+        import base64
+        try:raw=base64.b64decode(req.file_base64 or '',validate=True)
+        except Exception:raise HTTPException(422,'Invalid uploaded document encoding')
+        from browser.document_validation import validate_document
+        mime=req.file_mime or 'application/pdf'
+        filename=req.file_name or 'document.pdf'
+        validate_document(raw,filename,mime)
+        upload={'name':filename,'mimeType':mime,'buffer':raw}
+    else:upload=None
+    command=BrowserAction(action_id=str(uuid.uuid4()),observation_id=observation['observation_id'],
+            kind=kind,target_ref=e_ref,value=req.value or '',url=req.url or '',
+            verified=req.type in ('type','upload'),source_ref='core:verified-profile' if req.type in ('type','upload') else None,
+            timeout_ms=max(100,min(req.wait_ms or 5000,15000)))
+    try:
+        try:result=await act(ctx,command,upload)
+        finally:info.effect_started=ctx.last_effect_started
+    except HTTPException as exc:
+        if exc.status_code in (403,409,422):raise
+        return {'ok':False,'error':str(exc.detail)}
+    info.observation_id=result['observation']['observation_id']
+    # Update role/name mapping based on observed post-action page so next
+    # core action can be grounded without waiting on a forced observation.
+    convert(result['observation'],info)
+    info.fingerprint=ctx.fingerprint
+    return {'ok':True}
 
 async def scoped_interaction(ctx,locator,intent,post_target=None):
     """Permit a vetted write during this single observed click only.
@@ -459,12 +505,16 @@ async def scoped_interaction(ctx,locator,intent,post_target=None):
             if not post_target or origin(post_target)!=scope_origin or final_path(post_target):
                 raise HTTPException(403,'Upload target needs a reviewed portal adapter')
             ctx.write_scope=(scope_origin,intent,post_target.split('#',1)[0].split('?',1)[0])
+            ctx.write_event=asyncio.Event()
         else:ctx.write_scope=(scope_origin,intent)
     except ValueError:ctx.write_scope=None  # in-memory about:blank test fixture only
     try:
         await locator.click(timeout=8000)
+        if intent=='upload_form' and ctx.write_event:
+            try:await asyncio.wait_for(ctx.write_event.wait(),1)
+            except asyncio.TimeoutError:pass
     finally:
-        ctx.write_scope=None
+        ctx.write_scope=None;ctx.write_event=None
 
 
 async def challenge_regions(ctx):
@@ -513,17 +563,41 @@ class HumanAction(BaseModel):
     y: float | None = None
 
 
+def release_human(info,ctx):
+    info.human_task_id=None;info.human_expires=0.0;ctx.human_captcha_until=0.0
+    info.auth_value_entered=False;info.auth_ref=None
+
+def expire_human(info,ctx):
+    if info.human_task_id and info.human_expires<=time.time():release_human(info,ctx)
+
+def verify_attempt(info):
+    if info.otp_verify_count>=5:raise HTTPException(429,'Too many verification attempts; stop and check the official portal')
+    info.otp_verify_count+=1
+
 def ensure_human(info, task_id):
+    if info.context_id not in contexts:raise HTTPException(404,'Browser context closed')
     if not info.human_task_id or info.human_expires<=time.time() or not secrets.compare_digest(info.human_task_id,task_id):
         raise HTTPException(403,'No active human assistance task for this session')
 
+
+@router.get('/session/{sid}/human-status')
+async def human_status(sid:str,x_internal_key:str|None=Header(None)):
+    worker().require_key(x_internal_key)
+    info,ctx=get(sid)
+    async with ctx.lock:
+        expire_human(info,ctx)
+        return {'state':'active' if info.human_task_id else 'none','task_id':info.human_task_id,
+                'expires_at':info.human_expires,'needs_reconciliation':bool(info.uncertain_action)}
 
 @router.post('/session/{sid}/human-begin')
 async def human_begin(sid:str,req:HumanBegin,x_internal_key:str|None=Header(None)):
     worker().require_key(x_internal_key)
     info,ctx=get(sid)
     async with ctx.lock:
+        if contexts.get(info.context_id) is not ctx:raise HTTPException(404,'Browser context closed')
+        expire_human(info,ctx)
         if info.human_task_id:raise HTTPException(409,'Session already assigned to a human')
+        if req.expires_at and not time.time()<req.expires_at<=time.time()+601:raise HTTPException(422,'Human task expiry must be within 600 seconds')
         info.human_task_id=req.task_id
         info.human_expires=req.expires_at or (time.time()+300)
         ctx.human_captcha_until=info.human_expires
@@ -535,6 +609,7 @@ async def human_view(sid:str,req:HumanBegin,x_internal_key:str|None=Header(None)
     worker().require_key(x_internal_key)
     info,ctx=get(sid);ensure_human(info,req.task_id)
     async with ctx.lock:
+        ensure_human(info,req.task_id)
         obs=await observe(ctx)
         # Filter to controls useful for manual verification only. No raw OTP
         # values are returned and no screenshot is sent to the LLM.
@@ -552,6 +627,7 @@ async def human_act(sid:str,req:HumanAction,x_internal_key:str|None=Header(None)
     worker().require_key(x_internal_key)
     info,ctx=get(sid);ensure_human(info,req.task_id)
     async with ctx.lock:
+        ensure_human(info,req.task_id)
         if req.observation_id:
             fingerprint,*_=await signature(ctx)
             if req.observation_id!=ctx.observation_id or fingerprint!=ctx.fingerprint:
@@ -576,8 +652,7 @@ async def human_act(sid:str,req:HumanAction,x_internal_key:str|None=Header(None)
                 if info.otp_sent>=2:raise HTTPException(429,'OTP resend limit reached; wait or request official support')
                 info.otp_sent+=1
             if e['category']=='otp_verify':
-                if info.otp_verify_count>=5:raise HTTPException(429,'Too many verification attempts; stop and check the official portal')
-                info.otp_verify_count+=1
+                verify_attempt(info)
             if e['category']=='upload_step' and e.get('form_upload_only'):
                 await scoped_interaction(ctx,ctx.targets[e['ref']], 'upload_form',post_target=e['form_action'])
             else:
@@ -598,13 +673,11 @@ async def human_finish(sid:str,req:HumanBegin,x_internal_key:str|None=Header(Non
     worker().require_key(x_internal_key)
     info,ctx=get(sid);ensure_human(info,req.task_id)
     async with ctx.lock:
+        ensure_human(info,req.task_id)
         obs=await observe(ctx)
         # A citizen attestation is not proof that the challenge was solved;
         # core receives an explicit unverified flag and MUST re-inspect.
-        info.human_task_id=None
-        info.human_expires=0.0
-        ctx.human_captcha_until=0.0
-        info.auth_value_entered=False
+        release_human(info,ctx)
         convert(obs,info);info.fingerprint=ctx.fingerprint
         return {'state':'resumed','verified':False,'still_waiting_human':bool(obs['human_signals']),
                 'observation_id':obs['observation_id']}
@@ -616,17 +689,22 @@ async def human_cancel(sid:str,req:HumanBegin,x_internal_key:str|None=Header(Non
     info,ctx=get(sid)
     async with ctx.lock:
         ensure_human(info,req.task_id)
-        info.human_task_id=None;info.human_expires=0.0;ctx.human_captcha_until=0.0
+        release_human(info,ctx)
     return {'state':'cancelled'}
 
 
 @router.delete('/session/{sid}')
 async def close(sid:str,x_internal_key:str|None=Header(None)):
     worker().require_key(x_internal_key)
-    info=bridges.pop(sid,None)
+    info=bridges.get(sid)
     if info:
-        ctx=contexts.pop(info.context_id,None)
-        if ctx:await ctx.context.close()
+        ctx=contexts.get(info.context_id)
+        if ctx:
+            async with ctx.lock:
+                release_human(info,ctx)
+                bridges.pop(sid,None);contexts.pop(info.context_id,None)
+                await ctx.context.close()
+        else:bridges.pop(sid,None)
     return {'closed':True}
 
 @router.get('/session/{sid}/view')

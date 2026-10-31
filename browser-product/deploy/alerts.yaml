@@ -22,3 +22,10 @@ groups:
           severity: warning
         annotations:
           summary: Inspect the observed browser state and reconcile the human task.
+      - alert: CoreAssistanceNeedsReconciliation
+        expr: gradientzero_core_assist_tasks{state="needs_reconciliation"} > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: Inspect worker ownership and browser outcome before retrying a handoff.

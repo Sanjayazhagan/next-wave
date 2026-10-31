@@ -7,7 +7,7 @@ from fastapi import APIRouter,Header,HTTPException
 from playwright.async_api import TimeoutError as PWTimeout, Error as PWError
 from pydantic import Field
 from browser.protocol import BrowserAction,ContextStart,StrictModel
-from browser.general import GeneralContext,act,observe,origin
+from browser.general import GeneralContext,act,observe,origin,bound_tabs
 from browser.public_web import navigation_mode, NAV_MODE_PUBLIC, assert_public_url
 
 router=APIRouter()
@@ -44,28 +44,27 @@ async def create(req:ContextStart,x_internal_key:str|None=Header(None)):
         if requested not in allowed:raise HTTPException(403,'Origin is not configured by the trusted operator')
     async with w.creation_lock:
         if len(w.sessions)+len(contexts)>=int(os.getenv('MAX_BROWSER_SESSIONS','8')):raise HTTPException(429,'Browser capacity reached')
-        context=await w.app.state.browser.new_context(viewport={'width':1180,'height':760},accept_downloads=False)
-        page=await context.new_page();session=GeneralContext(context=context,page=page,allowed=allowed,public_web=dynamic)
-        await context.route('**/*',session.route)
-        # No dialogs may hang a model-driven execution loop. Report them in future observation.
-        async def dialog(d):
-            session.dialogs.append({'kind':d.type,'disposition':'dismissed_for_safety','message_retained':False})
-            session.dialogs=session.dialogs[-20:]
-            await d.dismiss()
-        context.on('page',lambda p:p.on('dialog',dialog))
-        page.on('dialog',dialog)
+        context=None
         try:
+            context=await w.app.state.browser.new_context(viewport={'width':1180,'height':760},accept_downloads=False,service_workers='block')
+            page=await context.new_page();session=GeneralContext(context=context,page=page,allowed=allowed,public_web=dynamic)
+            bound_tabs(session)
+            await context.route('**/*',session.route)
+            await context.route_web_socket('**/*',lambda socket:socket.close())
+            async def dialog(d):
+                session.dialogs.append({'kind':d.type,'disposition':'dismissed_for_safety','message_retained':False})
+                session.dialogs=session.dialogs[-20:]
+                await d.dismiss()
+            context.on('page',lambda p:p.on('dialog',dialog));page.on('dialog',dialog)
             await page.goto(req.url,wait_until='domcontentloaded',timeout=15000)
             result=await observe(session)
-        except PWTimeout as exc:
-            await context.close()
-            raise HTTPException(504,'Browser navigation timed out. Run scripts/diagnose_browser_navigation.py in the worker to distinguish network, DNS, resource blocks and DOM readiness') from exc
-        except PWError as exc:
-            await context.close()
-            reason='environment_blocked_by_admin' if 'ERR_BLOCKED_BY_ADMINISTRATOR' in str(exc) else 'network_or_browser_failure'
-            raise HTTPException(502,f'Browser navigation failed: {reason}; check worker navigation diagnostics') from exc
-        except Exception:
-            await context.close();raise
+        except BaseException as exc:
+            if context is not None:
+                try:await context.close()
+                except Exception:pass
+            if isinstance(exc,PWTimeout):raise HTTPException(504,'Browser navigation timed out; run worker navigation diagnostics') from None
+            if isinstance(exc,PWError):raise HTTPException(502,'Browser setup or navigation failed; run worker navigation diagnostics') from None
+            raise
         contexts[session.id]=session
         return result
 
@@ -94,7 +93,8 @@ async def action(ident:str,req:ToolAction,x_internal_key:str|None=Header(None)):
         try:raw=base64.b64decode(req.file_base64,validate=True)
         except Exception:raise HTTPException(422,'Invalid prepared artifact encoding')
         if len(raw)>1048576:raise HTTPException(422,'Prepared upload must be at most 1 MB')
-        if req.file_mime=='application/pdf' and not raw.startswith(b'%PDF-'):raise HTTPException(422,'Invalid prepared PDF')
+        from browser.document_validation import validate_document
+        validate_document(raw,req.file_name,req.file_mime)
         upload={'name':req.file_name,'mimeType':req.file_mime,'buffer':raw}
     # Never retain a file or secret payload in the worker's replay cache.
     command=BrowserAction.model_validate(req.model_dump(exclude={'file_base64','file_name','file_mime'}))

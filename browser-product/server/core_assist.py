@@ -52,7 +52,7 @@ def digest(token):return hashlib.sha256(token.encode()).hexdigest()
 def lookup(task_id,token):
     database()
     with api().conn() as db:
-        db.execute("UPDATE core_assist_tasks SET state='expired' WHERE expires<? AND state='active'",(time.time(),))
+        db.execute("UPDATE core_assist_tasks SET state='expired' WHERE expires<? AND state IN ('offering','active','completing','needs_reconciliation')",(time.time(),))
         entry=db.execute('SELECT * FROM core_assist_tasks WHERE id=?',(task_id,)).fetchone()
     if not entry or entry['state']!='active' or entry['expires']<=time.time() or not token or not hmac.compare_digest(digest(token),entry['token_hash']):
         raise HTTPException(403,'Human assistance link expired or invalid')
@@ -69,14 +69,21 @@ async def offer(sid:str,req:Offer,request:Request,x_internal_key:str|None=Header
     authenticated(x_internal_key)
     database()
     with api().conn() as db:
-        if db.execute("SELECT 1 FROM core_assist_tasks WHERE session_id=? AND state='active' AND expires>?",(sid,time.time())).fetchone():
+        if db.execute("SELECT 1 FROM core_assist_tasks WHERE session_id=? AND state IN ('offering','active','completing','needs_reconciliation') AND expires>?",(sid,time.time())).fetchone():
             raise HTTPException(409,'Human assistance already pending for session')
     token=secrets.token_urlsafe(32);task_id=str(uuid.uuid4());expiry=time.time()+req.ttl_seconds
-    # Worker first: invalid browser-session IDs must not mint usable public URLs.
-    await api().worker('POST',f'/core/session/{sid}/human-begin',{'task_id':task_id,'expires_at':expiry})
     with api().conn() as db:
+        db.execute('BEGIN IMMEDIATE')
+        if db.execute("SELECT 1 FROM core_assist_tasks WHERE session_id=? AND state IN ('offering','active','completing','needs_reconciliation') AND expires>?",(sid,time.time())).fetchone():
+            raise HTTPException(409,'Human assistance already pending for session')
         db.execute('INSERT INTO core_assist_tasks VALUES (?,?,?,?,?,?,?)',
-                   (task_id,sid,digest(token),expiry,req.reason,'active',time.time()))
+                   (task_id,sid,digest(token),expiry,req.reason,'offering',time.time()))
+    try:
+        await api().worker('POST',f'/core/session/{sid}/human-begin',{'task_id':task_id,'expires_at':expiry})
+        with api().conn() as db:db.execute("UPDATE core_assist_tasks SET state='active' WHERE id=?",(task_id,))
+    except BaseException:
+        with api().conn() as db:db.execute("UPDATE core_assist_tasks SET state='needs_reconciliation' WHERE id=?",(task_id,))
+        raise
     api().audit(sid,'real_human_task_offered','Scoped real browser verification requested',{'task_id':task_id,'reason':req.reason})
     path=f'/core-assist/{task_id}#{token}'
     # Explicit deployment host prevents an attacker-controlled Host header from
@@ -92,9 +99,23 @@ async def offer(sid:str,req:Offer,request:Request,x_internal_key:str|None=Header
 async def status(sid:str,x_internal_key:str|None=Header(None)):
     authenticated(x_internal_key);database()
     with api().conn() as db:
-        db.execute("UPDATE core_assist_tasks SET state='expired' WHERE expires<? AND state='active'",(time.time(),))
+        db.execute("UPDATE core_assist_tasks SET state='expired' WHERE expires<? AND state IN ('offering','active','completing','needs_reconciliation')",(time.time(),))
         entry=db.execute('SELECT id,reason,state,expires FROM core_assist_tasks WHERE session_id=? ORDER BY created DESC LIMIT 1',(sid,)).fetchone()
-    return dict(entry) if entry else {'state':'none'}
+    if not entry:return {'state':'none'}
+    result=dict(entry)
+    if result['state'] in ('offering','active','completing','needs_reconciliation'):
+        try:
+            live=await api().worker('GET',f'/core/session/{sid}/human-status')
+            if live.get('task_id')!=result['id']:
+                result['state']='needs_reconciliation'
+                with api().conn() as db:
+                    db.execute("UPDATE core_assist_tasks SET state='needs_reconciliation' WHERE id=? AND state=?",(result['id'],entry['state']))
+                    current=db.execute('SELECT state FROM core_assist_tasks WHERE id=?',(result['id'],)).fetchone()
+                    if current:result['state']=current['state']
+        except HTTPException as exc:
+            result['state']='needs_reconciliation'
+            result['worker_available']=False
+    return result
 
 
 @router.get('/core-assist/{task_id}',name='core_assist_page')
@@ -135,8 +156,15 @@ async def control(task_id:str,req:Control,x_assist_token:str|None=Header(None)):
 @router.post('/core-assist/{task_id}/complete')
 async def complete(task_id:str,x_assist_token:str|None=Header(None)):
     entry=lookup(task_id,x_assist_token)
-    res=await api().worker('POST',f'/core/session/{entry["session_id"]}/human-finish',{'task_id':task_id})
-    with api().conn() as db:db.execute("UPDATE core_assist_tasks SET state='completed' WHERE id=? AND state='active'",(task_id,))
+    with api().conn() as db:
+        changed=db.execute("UPDATE core_assist_tasks SET state='completing' WHERE id=? AND state='active'",(task_id,)).rowcount
+        if not changed:raise HTTPException(409,'Assistance completion already processing')
+    try:
+        res=await api().worker('POST',f'/core/session/{entry["session_id"]}/human-finish',{'task_id':task_id})
+        with api().conn() as db:db.execute("UPDATE core_assist_tasks SET state='completed' WHERE id=?",(task_id,))
+    except BaseException:
+        with api().conn() as db:db.execute("UPDATE core_assist_tasks SET state='needs_reconciliation' WHERE id=?",(task_id,))
+        raise
     api().audit(entry['session_id'],'real_human_task_completed','Human returned browser control; core must verify outcome',{'task_id':task_id})
     return {**res,'note':'Completion was citizen-attested; core MUST re-observe the page and decide whether verification succeeded.'}
 
@@ -145,7 +173,7 @@ async def complete(task_id:str,x_assist_token:str|None=Header(None)):
 async def cancel(sid:str,x_internal_key:str|None=Header(None)):
     authenticated(x_internal_key);database()
     with api().conn() as db:
-        entry=db.execute("SELECT id FROM core_assist_tasks WHERE session_id=? AND state='active' AND expires>? ORDER BY created DESC LIMIT 1",(sid,time.time())).fetchone()
+        entry=db.execute("SELECT id FROM core_assist_tasks WHERE session_id=? AND state IN ('offering','active','completing','needs_reconciliation') AND expires>? ORDER BY created DESC LIMIT 1",(sid,time.time())).fetchone()
         if not entry:raise HTTPException(404,'No active assistance task')
     result=await api().worker('POST',f'/core/session/{sid}/human-cancel',{'task_id':entry['id']})
     with api().conn() as db:db.execute("UPDATE core_assist_tasks SET state='cancelled' WHERE id=?",(entry['id'],))

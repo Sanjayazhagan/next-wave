@@ -30,7 +30,7 @@ def trusted_captcha_provider(url):
 CONTROLS='a[href],button,input:not([type=hidden]),select,textarea,[role=button],[role=link],[role=checkbox],[contenteditable=true]'
 AUTH=re.compile(r'password|one.?time|\botp\b|captcha|verification code|security code|face.?auth',re.I)
 IDENTIFIER=re.compile(r'aadhaar|aadhar|bank|account.?number|card.?number|passport|national.?id|cc-number',re.I)
-IRREVERSIBLE=re.compile(r'submit|finali[sz]e|confirm.?application|pay\b|purchase|delete|remove.?account|approve.?application|apply.?now|register.?account',re.I)
+IRREVERSIBLE=re.compile(r'logout|log.?out|sign.?out|account/close|api/transfer|submit|finali[sz]e|confirm.?application|pay\b|purchase|delete|remove.?account|approve.?application|apply.?now|register.?account',re.I)
 
 
 def origin(url):
@@ -80,6 +80,8 @@ class GeneralContext:
     tab_ids:dict=field(default_factory=dict)
     action_results:dict=field(default_factory=dict)
     dialogs:list=field(default_factory=list)
+    last_effect_started:bool=False
+    write_event:object=None
     write_scope:tuple|None=None  # (origin, intent, optional exact URL); only during a vetted click
     human_captcha_until:float=0.0
 
@@ -125,6 +127,9 @@ class GeneralContext:
         # separately audited, site-specific approval adapter for these URLs.
         if final_path(url) or IRREVERSIBLE.search(urlsplit(url).path+' '+urlsplit(url).query):
             return await route.abort('blockedbyclient')
+        if method=='POST' and scoped and self.write_scope and self.write_scope[1]=='upload_form':
+            self.write_scope=None
+            if self.write_event:self.write_event.set()
         if self.public_web:
             try:
                 await assert_public_url(url)
@@ -135,6 +140,19 @@ class GeneralContext:
     def tab_id(self,page):
         if page not in self.tab_ids:self.tab_ids[page]=str(uuid.uuid4())
         return self.tab_ids[page]
+
+
+def bound_tabs(session):
+    import os
+    try:limit=int(os.getenv('MAX_BROWSER_TABS','8'))
+    except ValueError:raise HTTPException(503,'Invalid browser tab limit')
+    if not 1<=limit<=32:raise HTTPException(503,'Browser tab limit must be between 1 and 32')
+    async def opened(page):
+        if len(session.context.pages)>limit:
+            await page.close()
+            session.dialogs.append({'kind':'tab_limit','disposition':'closed','message_retained':False})
+            session.dialogs=session.dialogs[-20:]
+    session.context.on('page',opened)
 
 
 async def census(session):
@@ -163,7 +181,7 @@ async def census(session):
                 # these inputs; expose them as fileupload, not textbox.
                 if await loc.get_attribute('type') != 'file':
                     continue
-            data=await loc.evaluate(r'''e=>({tag:e.tagName.toLowerCase(),type:e.getAttribute('type')||'',role:e.getAttribute('role')||'',label:(e.labels?[...e.labels].map(x=>x.innerText).join(' '):'')||e.getAttribute('aria-label')||e.getAttribute('title')||e.getAttribute('placeholder')||e.innerText||e.getAttribute('name')||'',name:e.getAttribute('name')||'',required:e.required||e.getAttribute('aria-required')==='true',disabled:e.disabled||e.getAttribute('aria-disabled')==='true',value:e.type==='file'?'':(e.value||(e.isContentEditable?e.innerText:'')),href:e.getAttribute('href')||'',options:e.tagName==='SELECT'?[...e.options].slice(0,80).map(o=>({value:o.value,label:o.text,disabled:o.disabled})):[],checked:!!e.checked,form:!!e.form,accept:e.getAttribute('accept')||'',autocomplete:e.getAttribute('autocomplete')||'',form_method:e.form?.method||'',form_action:e.form?(e.hasAttribute('formaction')?e.formAction:e.form.action):'',form_enctype:e.form?.enctype||'',form_index:e.form?[...e.ownerDocument.forms].indexOf(e.form):-1,form_has_file:!!e.form&&[...e.form.elements].some(c=>c.tagName==='INPUT'&&c.type==='file'),form_upload_only:(()=>{const f=e.form;if(!f||f.method.toLowerCase()!=='post')return false;const inputs=[...f.elements];if(!inputs.some(c=>c.tagName==='INPUT'&&c.type==='file'))return false;if(inputs.some(c=>['INPUT','TEXTAREA','SELECT'].includes(c.tagName)&&!['file','hidden','submit','button','reset','image'].includes(c.type)))return false;const action=e.hasAttribute('formaction')?e.formAction:f.action;const path=new URL(action,e.ownerDocument.URL).pathname;if(!/(?:^|\/)(?:upload|attach|document|file)[\w-]*(?:\/|$)/i.test(path))return false;return !/(?:submit|finali[sz]e|complete|send|confirm|approve)\s+(?:the\s+)?(?:application|form|registration)/i.test(f.innerText||'')})(),readonly:!!e.readOnly,multiple:!!e.multiple,min:e.getAttribute('min'),max:e.getAttribute('max'),maxlength:e.getAttribute('maxlength'),pattern:e.getAttribute('pattern'),description:(e.getAttribute('aria-describedby')||'').split(/\s+/).map(id=>e.ownerDocument.getElementById(id)?.innerText||'').join(' ').slice(0,500),upload_hint:e.type==='file'?(e.closest('label')?.innerText||e.parentElement?.innerText||'').slice(0,320):'',validation_message:e.validationMessage||'',file_count:e.files?.length||0,contenteditable:e.isContentEditable})''')
+            data=await loc.evaluate(r'''e=>({tag:e.tagName.toLowerCase(),type:e.getAttribute('type')||'',role:e.getAttribute('role')||'',label:(e.labels?[...e.labels].map(x=>x.innerText).join(' '):'')||e.getAttribute('aria-label')||e.getAttribute('title')||e.getAttribute('placeholder')||e.innerText||(['submit','button','reset'].includes(e.type)?e.value:'')||e.getAttribute('name')||'',name:e.getAttribute('name')||'',required:e.required||e.getAttribute('aria-required')==='true',disabled:e.disabled||e.getAttribute('aria-disabled')==='true',value:e.type==='file'?'':(e.value||(e.isContentEditable?e.innerText:'')),href:e.getAttribute('href')||'',options:e.tagName==='SELECT'?[...e.options].slice(0,80).map(o=>({value:o.value,label:o.text,disabled:o.disabled})):[],checked:!!e.checked,form:!!e.form,accept:e.getAttribute('accept')||'',autocomplete:e.getAttribute('autocomplete')||'',form_method:e.form?.method||'',form_action:e.form?(e.hasAttribute('formaction')?e.formAction:e.form.action):'',form_enctype:e.form?.enctype||'',form_index:e.form?[...e.ownerDocument.forms].indexOf(e.form):-1,form_has_file:!!e.form&&[...e.form.elements].some(c=>c.tagName==='INPUT'&&c.type==='file'),form_upload_only:(()=>{const f=e.form;if(!f||f.method.toLowerCase()!=='post')return false;const inputs=[...f.elements];if(!inputs.some(c=>c.tagName==='INPUT'&&c.type==='file'))return false;if(inputs.some(c=>['INPUT','TEXTAREA','SELECT'].includes(c.tagName)&&!['file','hidden','submit','button','reset','image'].includes(c.type)))return false;const action=e.hasAttribute('formaction')?e.formAction:f.action;const path=new URL(action,e.ownerDocument.URL).pathname;if(!/(?:^|\/)(?:upload|attach|document|file)[\w-]*(?:\/|$)/i.test(path))return false;return !/(?:submit|finali[sz]e|complete|send|confirm|approve)\s+(?:the\s+)?(?:application|form|registration)/i.test(f.innerText||'')})(),readonly:!!e.readOnly,multiple:!!e.multiple,min:e.getAttribute('min'),max:e.getAttribute('max'),maxlength:e.getAttribute('maxlength'),pattern:e.getAttribute('pattern'),description:(e.getAttribute('aria-describedby')||'').split(/\s+/).map(id=>e.ownerDocument.getElementById(id)?.innerText||'').join(' ').slice(0,500),upload_hint:e.type==='file'?(e.closest('label')?.innerText||e.parentElement?.innerText||'').slice(0,320):'',validation_message:e.validationMessage||'',file_count:e.files?.length||0,contenteditable:e.isContentEditable})''')
             data['label']=data['label'].strip()[:300];data['name']=data['name'][:100];data['upload_hint']=data.get('upload_hint','').strip()[:320]
             if data['form_action']:data['form_action']=safe_url(data['form_action'])
             description=' '.join((data['label'],data['name'],data['type'],data['autocomplete']))
@@ -261,6 +279,7 @@ async def observe(session):
 
 
 async def act(session,req:BrowserAction,upload=None):
+    session.last_effect_started=False
     fingerprint=hashlib.sha256(req.model_dump_json().encode()).hexdigest()
     previous=session.action_results.get(req.action_id)
     if previous:
@@ -293,6 +312,7 @@ async def act(session,req:BrowserAction,upload=None):
         if not any(a in (extension,mime,'*/*') or (a.endswith('/*') and mime.startswith(a[:-1])) for a in accepted):
             raise HTTPException(422,'Prepared artifact does not match the observed upload accept constraint')
     session.action_results[req.action_id]=(fingerprint,None)
+    session.last_effect_started=True
     try:
         extracted=None
         if req.kind=='click':

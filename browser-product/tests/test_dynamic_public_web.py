@@ -114,6 +114,8 @@ async def test_core_session_accepts_dynamic_url_only_with_consent(monkeypatch):
         def __init__(self):self.page=Page();self.closed=False
         async def new_page(self):return self.page
         async def route(self,*args):pass
+        async def route_web_socket(self,*args):pass
+        def on(self,*args):pass
         async def close(self):self.closed=True
     class Browser:
         async def new_context(self,**kwargs):return Context()

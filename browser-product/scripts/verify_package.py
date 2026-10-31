@@ -26,6 +26,7 @@ def main():
             z.extractall(target)
         source=target/'gradientzero-browser'
         assert (source/'web'/'index.html').exists() and (source/'web'/'browser_lab.html').exists()
+        assert (source/'compose.integrated.yaml').exists()
         assert not (source/'data').exists() and not (source/'.env').exists()
         venv=target/'clean-env';python=venv/('Scripts/python.exe' if os.name=='nt' else 'bin/python')
         with (out/'clean-install.log').open('w',encoding='utf-8') as log:

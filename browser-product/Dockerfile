@@ -3,5 +3,6 @@ WORKDIR /app
 COPY requirements.lock /app/requirements.lock
 RUN pip install --no-cache-dir -r requirements.lock
 COPY . /app
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data && chown -R pwuser:pwuser /app
+USER pwuser
 EXPOSE 8000 8101

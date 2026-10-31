@@ -32,17 +32,8 @@ async def upload(sid: str, document: PreparedDocument, x_internal_key: str | Non
     except Exception:
         raise HTTPException(422,'Invalid document encoding')
     mime=getattr(document,'mime_type','application/pdf')
-    if len(raw)>1048576:raise HTTPException(422,'Prepared artifact exceeds 1 MB')
-    if mime=='application/pdf':
-        if not raw.startswith(b'%PDF-') or not document.file_name.endswith('.pdf'):raise HTTPException(422,'Prepared PDF signature/extension mismatch')
-    else:
-        from PIL import Image
-        try:
-            with Image.open(io.BytesIO(raw)) as image:
-                if image.width*image.height>20000000 or (mime,image.format) not in (('image/png','PNG'),('image/jpeg','JPEG')):raise ValueError()
-                image.verify()
-            if not document.file_name.endswith(('.png',) if mime=='image/png' else ('.jpg','.jpeg')):raise ValueError()
-        except Exception:raise HTTPException(422,'Prepared image signature, dimensions or extension invalid')
+    from browser.document_validation import validate_document
+    validate_document(raw,document.file_name,mime)
     ident=str(uuid.uuid4()); scope=f'artifact:{sid}:{ident}'
     try:
         encrypted=pack(raw,scope)
