@@ -7,9 +7,11 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pypdfium2 as pdfium
+import pytesseract
 from PIL import Image, ImageOps
 from pillow_heif import register_heif_opener
 
+from . import ocr as _ocr  # noqa: F401  (sets Tesseract's thread limit)
 from .models import Quality
 
 register_heif_opener()
@@ -76,6 +78,42 @@ def find_document(img: np.ndarray) -> tuple[np.ndarray, bool]:
             m = cv2.getPerspectiveTransform(src, dst)
             return cv2.warpPerspective(img, m, (out_w, out_h)), True
     return img, False
+
+
+_ROTATIONS = {90: cv2.ROTATE_90_CLOCKWISE, 180: cv2.ROTATE_180, 270: cv2.ROTATE_90_COUNTERCLOCKWISE}
+
+
+UPRIGHT_ENOUGH = 10   # confident words that settle "already upright" without trying other turns
+
+
+def _readable_words(img: np.ndarray) -> int:
+    """Confident words when read as one block of horizontal text. Tesseract's default mode
+    also reads sideways text, so it can't tell the orientations apart; this mode can."""
+    d = pytesseract.image_to_data(img, lang="eng", config="--psm 6", output_type=pytesseract.Output.DICT)
+    return sum(1 for t, c in zip(d["text"], d["conf"]) if len(t.strip()) >= 3 and t.strip().isalpha() and float(c) > 70)
+
+
+def upright(img: np.ndarray) -> tuple[np.ndarray, int]:
+    """Turn a sideways or upside-down photo upright. Returns (image, degrees rotated clockwise).
+
+    Tesseract's own orientation detection is unreliable on photocopies, so each of the four
+    orientations of a small copy is read and the one with the most confident words wins.
+    Masking depends on this: upside-down digits aren't recognised, so they can't be blacked out.
+    """
+    h, w = img.shape[:2]
+    scale = min(1.0, 1000 / max(h, w))  # smaller copies of faint photocopies give too few words
+    small = cv2.resize(img, (max(1, int(w * scale)), max(1, int(h * scale))), interpolation=cv2.INTER_AREA)
+    try:
+        scores = {0: _readable_words(small)}
+        if scores[0] >= UPRIGHT_ENOUGH:
+            return img, 0
+        scores.update({deg: _readable_words(cv2.rotate(small, code)) for deg, code in _ROTATIONS.items()})
+    except pytesseract.TesseractError:
+        return img, 0
+    best = max(scores, key=scores.get)
+    if best == 0 or scores[best] <= scores[0] * 1.2:
+        return img, 0
+    return cv2.rotate(img, _ROTATIONS[best]), best
 
 
 def measure_skew(img: np.ndarray) -> float:

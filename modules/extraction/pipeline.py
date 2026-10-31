@@ -62,7 +62,8 @@ def typed(field: str, raw: str | None) -> object:
 
 
 def _clean_page(raw: np.ndarray) -> tuple[_Page, dict[str, list[str]]]:
-    img, _ = preprocess.find_document(raw)
+    img, _ = preprocess.upright(raw)
+    img, _ = preprocess.find_document(img)
     img, skew = preprocess.deskew(img)
     words = ocr.read_words(img)
     # Mask before saving and before any LLM call: the model never sees a full number.

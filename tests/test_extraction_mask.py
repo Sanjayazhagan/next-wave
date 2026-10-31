@@ -46,3 +46,24 @@ def test_redact_on_rendered_image_leaves_no_12_digit_run():
     assert last4.get("aadhaar") == ["9012"]
     text = " ".join(w.text for w in ocr.read_words(out, min_conf=0))
     assert not re.search(r"\d{4}\s?\d{4}\s?\d{4}", text)
+
+
+def test_black_box_leaves_no_trace():
+    img = np.full((60, 400, 3), 200, np.uint8)
+    out, _, _ = redact(img, [_w("1234", 100), _w("5678", 170), _w("9012", 240)])
+    x0, y0, x1, y1 = 100 - 8, 10 - 8, 300 + 8, 30 + 8
+    assert (out[y0:y1, x0:x1] == 0).all()          # solid black, not a blur
+    assert (out[45:, :] == 200).all()              # nothing else touched
+
+
+@needs_tesseract
+def test_upright_turns_an_upside_down_page():
+    from modules.extraction import preprocess
+    page = np.full((1400, 1000, 3), 255, np.uint8)
+    for i in range(14):
+        cv2.putText(page, f"This is to certify that the applicant line {i}", (40, 80 + 90 * i),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 0), 2)
+    _, turned = preprocess.upright(cv2.rotate(page, cv2.ROTATE_180))
+    assert turned == 180
+    _, turned = preprocess.upright(page)
+    assert turned == 0
