@@ -1,0 +1,129 @@
+﻿{
+    "at":  "2026-10-31T09:38:59.3558097Z",
+    "api":  "http://localhost:8100/integration/v2/browser",
+    "pass":  20,
+    "fail":  0,
+    "tests":  [
+                  {
+                      "test":  "01 API readiness",
+                      "status":  "PASS",
+                      "seconds":  2.21,
+                      "detail":  ""
+                  },
+                  {
+                      "test":  "02 Authenticated capabilities contract",
+                      "status":  "PASS",
+                      "seconds":  0.03,
+                      "detail":  ""
+                  },
+                  {
+                      "test":  "03 Wrong API key is denied (401)",
+                      "status":  "PASS",
+                      "seconds":  0.04,
+                      "detail":  ""
+                  },
+                  {
+                      "test":  "04 SSRF: private localhost URL blocked (403)",
+                      "status":  "PASS",
+                      "seconds":  0.08,
+                      "detail":  ""
+                  },
+                  {
+                      "test":  "05 Open official Selenium practice website",
+                      "status":  "PASS",
+                      "seconds":  2.55,
+                      "detail":  ""
+                  },
+                  {
+                      "test":  "06 Model-input schema is ready for LangGraph (no LLM call)",
+                      "status":  "PASS",
+                      "seconds":  0.82,
+                      "detail":  ""
+                  },
+                  {
+                      "test":  "07 Fill text input and verify readback",
+                      "status":  "PASS",
+                      "seconds":  2.24,
+                      "detail":  ""
+                  },
+                  {
+                      "test":  "08 Same action ID is replay-safe (no second fill)",
+                      "status":  "PASS",
+                      "seconds":  0.04,
+                      "detail":  ""
+                  },
+                  {
+                      "test":  "09 Reject stale observation ID (409)",
+                      "status":  "PASS",
+                      "seconds":  0.07,
+                      "detail":  ""
+                  },
+                  {
+                      "test":  "10 Fill textarea with second synthetic value",
+                      "status":  "PASS",
+                      "seconds":  2.04,
+                      "detail":  ""
+                  },
+                  {
+                      "test":  "11 Select a non-disabled dropdown option",
+                      "status":  "PASS",
+                      "seconds":  2.08,
+                      "detail":  ""
+                  },
+                  {
+                      "test":  "12 Check an unchecked checkbox",
+                      "status":  "PASS",
+                      "seconds":  2.15,
+                      "detail":  ""
+                  },
+                  {
+                      "test":  "12A Fill date picker",
+                      "status":  "PASS",
+                      "seconds":  2.11,
+                      "detail":  ""
+                  },
+                  {
+                      "test":  "13 File input visible in the observation",
+                      "status":  "PASS",
+                      "seconds":  0.01,
+                      "detail":  ""
+                  },
+                  {
+                      "test":  "14 Upload synthetic PDF through owner-scoped artifact API",
+                      "status":  "PASS",
+                      "seconds":  3.6,
+                      "detail":  ""
+                  },
+                  {
+                      "test":  "15 Password / human-auth field cannot be filled by generic agent (403)",
+                      "status":  "PASS",
+                      "seconds":  1.3,
+                      "detail":  ""
+                  },
+                  {
+                      "test":  "16 Generic final Submit click is denied (403)",
+                      "status":  "PASS",
+                      "seconds":  1.32,
+                      "detail":  ""
+                  },
+                  {
+                      "test":  "17 Read-only screenshot endpoint and audit events",
+                      "status":  "PASS",
+                      "seconds":  1.6,
+                      "detail":  ""
+                  },
+                  {
+                      "test":  "18 Navigate to a second external HTTPS site without changing .env",
+                      "status":  "PASS",
+                      "seconds":  1.39,
+                      "detail":  ""
+                  },
+                  {
+                      "test":  "19 Close browser context and release resources",
+                      "status":  "PASS",
+                      "seconds":  0.1,
+                      "detail":  ""
+                  }
+              ],
+    "disclaimer":  "No LangGraph/LLM inference or real application final submission performed."
+}

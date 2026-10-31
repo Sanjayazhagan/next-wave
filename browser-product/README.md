@@ -116,3 +116,7 @@ python scripts/benchmark.py --runs 5
 ### Safety
 
 Do not load genuine citizen documents, OTPs, credentials, IDs or real portal URLs in this demo. Do not publish the API to the open internet. Do not claim a mock receipt is government-issued. Authorize actual portal integration and verify terms; pause humans for CAPTCHA, OTP and face authentication.
+
+### October 31: real-browser human handoff update
+
+The browser branch now includes a separate token-protected real-site assistance UI at `/core-assist/<task-id>` (not the fictional `/assist` route), plus API `POST /core-browser/session/{sid}/human-task`. OTP request, upload, Next/Save and final-submit controls are now distinguished, but unreviewed site POSTs and final submission remain restricted. See `docs/REAL_BROWSER_INTERMEDIATE_AND_HANDOFF.md` and `docs/AZURE_UPDATE_EXISTING_BROWSER.md` before deploying. No LangGraph or WhatsApp code is included in this branch.

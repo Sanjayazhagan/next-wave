@@ -19,7 +19,8 @@ from fastapi import APIRouter, Header, HTTPException
 from playwright.async_api import TimeoutError as PWTimeout, Error as PWError
 from pydantic import BaseModel, Field
 
-from browser.general import GeneralContext, observe, act, origin, signature
+from browser.general import GeneralContext, observe, act, origin, signature, intermediate_post_permitted
+from browser.step_policy import category, final_path
 from browser.public_web import navigation_mode, NAV_MODE_PUBLIC, assert_public_url
 from browser.general_routes import contexts
 from browser.protocol import BrowserAction
@@ -70,6 +71,11 @@ class BridgeSession:
     auth_value_entered: bool = False
     last_action: str = ''
     receipt_pattern: str | None = None
+    human_task_id: str | None = None
+    human_expires: float = 0.0
+    otp_sent: int = 0
+    otp_window: float = 0.0
+    otp_verify_count: int = 0
 
 bridges: dict[str, BridgeSession] = {}
 
@@ -140,8 +146,7 @@ def human_kind(e):
 
 
 def final_control(e):
-    if e['risk'] != 'irreversible': return False
-    return bool(re.search(r'\b(submit|finali[sz]e|send application|pay|apply now|confirm application)\b', identify(e), re.I))
+    return e.get('category') in ('final','final_unknown')
 
 
 def challenge_info(obs, nodes):
@@ -187,6 +192,7 @@ def convert(obs, info):
                        # Additive metadata: legacy PageNode ignores extras;
                        # updated core can use them for rigorous upload checks.
                        'element_type':e.get('type',''),
+                       'action_category':e.get('category','ordinary'),
                        'accept':e.get('accept','') if role=='fileupload' else '',
                        'required':bool(e.get('required',False)),
                        'multiple':bool(e.get('multiple',False)),
@@ -312,6 +318,10 @@ async def action(sid:str,req:CoreAction,x_internal_key:str|None=Header(None)):
     worker().require_key(x_internal_key)
     info,ctx=get(sid)
     async with ctx.lock:
+        if info.human_task_id and info.human_expires<=time.time():
+            info.human_task_id=None;ctx.human_captcha_until=0.0
+        if info.human_task_id:
+            raise HTTPException(409,'Human assistance owns this browser session; wait for completion')
         # Trust ONLY currently observed target names and the exact DOM state
         # presented to the planner. A page transition between snapshot and
         # action is a hard stop, not a reason to guess a selector.
@@ -342,28 +352,47 @@ async def action(sid:str,req:CoreAction,x_internal_key:str|None=Header(None)):
             return {'ok':True}
         if req.type=='click' and e and e['risk']!='ordinary':
             label=identify(e)
+            intent=e.get('category','ordinary')
             if final_control(e):
                 approval=info.approval
                 if not approval or info.consumed or approval[2]<time.time():
-                    raise HTTPException(403,'Submission requires an unexpired citizen approval from core')
+                    raise HTTPException(403,'Submission requires unexpired citizen approval from core')
                 if info.observation_id!=approval[1]:raise HTTPException(409,'Review changed; reapprove before submitting')
-                info.consumed=True  # fail closed on an uncertain submission
-                # The operator must explicitly allow portal writes as well.
                 if os.getenv('BROWSER_ENABLE_FINAL_SUBMIT','false').lower()!='true':
                     raise HTTPException(403,'Final submission is disabled by operator policy')
+                # A generic form is NOT a validated application adapter. Its
+                # network write may still be blocked by route() on public-web.
+                info.consumed=True
                 await ctx.targets[e_ref].click(timeout=8000)
-                after=await observe(ctx)
-                convert(after,info)
-                info.fingerprint=ctx.fingerprint
+                after=await observe(ctx);convert(after,info);info.fingerprint=ctx.fingerprint
                 return {'ok':True}
-            if info.auth_value_entered and re.search(r'verify|continue|check|sign in|login',label,re.I):
+            if intent == 'otp_send':
+                # No model-driven repeat flood. Core holds a consent-backed
+                # session, but further requests require new user supervision.
+                now=time.time()
+                if now-info.otp_window>600:info.otp_window=now;info.otp_sent=0
+                if info.otp_sent>=2:raise HTTPException(429,'OTP request limit reached; pause for human assistance')
+                if not re.search(r'otp|login|verification|sign in|sign-in',observation.get('text',''),re.I):
+                    raise HTTPException(403,'OTP request not supported by current page context')
+                info.otp_sent+=1
+                await scoped_interaction(ctx,ctx.targets[e_ref],intent)
+                after=await observe(ctx);convert(after,info);info.fingerprint=ctx.fingerprint
+                return {'ok':True,'kind':'otp_request','requires_human_otp':True}
+            if intent=='otp_verify' and info.auth_value_entered:
                 info.auth_value_entered=False
+                await scoped_interaction(ctx,ctx.targets[e_ref],intent)
+                after=await observe(ctx);convert(after,info);info.fingerprint=ctx.fingerprint
+                return {'ok':True,'kind':'auth_verification','verified':False}
+            if intent=='upload_step':
+                # A page-level Upload button is a POST on many real forms.
+                # Autonomous permission is strictly operator-reviewed by
+                # origin, not inherited from generic public-web browsing.
+                if not intermediate_post_permitted(ctx.page.url,public_web=ctx.public_web):
+                    raise HTTPException(403,'Upload action requires an operator-reviewed intermediate POST origin or human assistance')
                 await ctx.targets[e_ref].click(timeout=8000)
-                after=await observe(ctx)
-                convert(after,info)
-                info.fingerprint=ctx.fingerprint
-                return {'ok':True}
-            raise HTTPException(403,'Irreversible browser action requires a dedicated human/approval workflow')
+                after=await observe(ctx);convert(after,info);info.fingerprint=ctx.fingerprint
+                return {'ok':True,'kind':'document_upload_step'}
+            raise HTTPException(403,'Sensitive action requires human assistance or a reviewed portal adapter')
         if req.type=='upload':
             if not e or e.get('type')!='file':
                 raise HTTPException(422,'Upload action requires an observed file input; use the fileupload role')
@@ -393,6 +422,150 @@ async def action(sid:str,req:CoreAction,x_internal_key:str|None=Header(None)):
         convert(result['observation'],info)
         info.fingerprint=ctx.fingerprint
         return {'ok':True}
+
+
+async def scoped_interaction(ctx,locator,intent):
+    """Permit one same-origin auth POST during one approved observed click.
+
+    Never grants final-submit URL patterns and never applies to arbitrary
+    background or cross-origin writes outside the scoped click.
+    """
+    try:ctx.write_scope=(origin(ctx.page.url), intent)
+    except ValueError:ctx.write_scope=None  # in-memory about:blank test fixture only
+    try:
+        await locator.click(timeout=8000)
+    finally:
+        ctx.write_scope=None
+
+
+async def challenge_regions(ctx):
+    """Only human-auth challenge surfaces, never arbitrary screenshot clicks."""
+    boxes=[]
+    for frame in ctx.page.frames[1:]:
+        if not re.search(r'captcha|recaptcha|hcaptcha|turnstile',frame.url,re.I):continue
+        try:
+            region=await (await frame.frame_element()).bounding_box()
+            if region: boxes.append(region)
+        except Exception:pass
+    for locator in [ctx.page.locator('img[alt*="captcha" i],img[src*="captcha" i],canvas[aria-label*="captcha" i]')]:
+        try:
+            for i in range(min(await locator.count(),8)):
+                region=await locator.nth(i).bounding_box()
+                if region:boxes.append(region)
+        except Exception:pass
+    return boxes
+
+
+class HumanBegin(BaseModel):
+    task_id: str = Field(min_length=8,max_length=100)
+    expires_at: float | None = None
+
+class HumanAction(BaseModel):
+    task_id: str = Field(min_length=8,max_length=100)
+    kind: str
+    target_ref: str | None = None
+    value: str = Field(default='',max_length=100)
+    x: float | None = None
+    y: float | None = None
+
+
+def ensure_human(info, task_id):
+    if not info.human_task_id or info.human_expires<=time.time() or not secrets.compare_digest(info.human_task_id,task_id):
+        raise HTTPException(403,'No active human assistance task for this session')
+
+
+@router.post('/session/{sid}/human-begin')
+async def human_begin(sid:str,req:HumanBegin,x_internal_key:str|None=Header(None)):
+    worker().require_key(x_internal_key)
+    info,ctx=get(sid)
+    async with ctx.lock:
+        if info.human_task_id:raise HTTPException(409,'Session already assigned to a human')
+        info.human_task_id=req.task_id
+        info.human_expires=req.expires_at or (time.time()+300)
+        ctx.human_captcha_until=info.human_expires
+    return {'state':'paused_for_human'}
+
+
+@router.post('/session/{sid}/human-view')
+async def human_view(sid:str,req:HumanBegin,x_internal_key:str|None=Header(None)):
+    worker().require_key(x_internal_key)
+    info,ctx=get(sid);ensure_human(info,req.task_id)
+    async with ctx.lock:
+        obs=await observe(ctx)
+        # Filter to controls useful for manual verification only. No raw OTP
+        # values are returned and no screenshot is sent to the LLM.
+        controls=[{'ref':e['ref'],'label':e['label'],'category':e['category'],
+                   'type':e['type'],'bounds':e['bounds']} for e in obs['elements']
+                  if e['category'] in ('human_input','otp_send','otp_verify','upload_step')]
+        captcha_boxes=await challenge_regions(ctx)
+        return {'state':'human_in_control','url':obs['url'],'screenshot_base64':obs['screenshot_base64'],
+                'viewport':obs['viewport'],'controls':controls,'challenge_boxes':captcha_boxes,
+                'human_signals':obs['human_signals'],'observation_id':obs['observation_id']}
+
+
+@router.post('/session/{sid}/human-act')
+async def human_act(sid:str,req:HumanAction,x_internal_key:str|None=Header(None)):
+    worker().require_key(x_internal_key)
+    info,ctx=get(sid);ensure_human(info,req.task_id)
+    async with ctx.lock:
+        obs=await observe(ctx)
+        e=next((c for c in obs['elements'] if c['ref']==req.target_ref),None)
+        if req.kind=='fill':
+            if not e or e['category']!='human_input' or e['tag'] not in ('input','textarea'):
+                raise HTTPException(403,'Only observed verification fields can be filled by this link')
+            # Do not log, persist, echo or store the supplied OTP/CAPTCHA text.
+            await ctx.targets[e['ref']].fill(req.value,timeout=8000)
+            info.auth_value_entered=True
+        elif req.kind=='click':
+            if not e or e['category'] not in ('otp_send','otp_verify','upload_step'):
+                raise HTTPException(403,'Human link cannot click final/unknown controls')
+            if e['category']=='upload_step' and not any(c.get('type')=='file' and c.get('file_count') for c in obs['elements']):
+                raise HTTPException(409,'Attach the document before using the upload button')
+            if e['category']=='otp_send':
+                now=time.time()
+                if now-info.otp_window>600:info.otp_window=now;info.otp_sent=0
+                if info.otp_sent>=2:raise HTTPException(429,'OTP resend limit reached; wait or request official support')
+                info.otp_sent+=1
+            if e['category']=='otp_verify':
+                if info.otp_verify_count>=5:raise HTTPException(429,'Too many verification attempts; stop and check the official portal')
+                info.otp_verify_count+=1
+            await scoped_interaction(ctx,ctx.targets[e['ref']], 'human_challenge')
+        elif req.kind=='challenge_click':
+            if req.x is None or req.y is None:raise HTTPException(422,'Click coordinates are required')
+            matched=any(r['x']<=req.x<=r['x']+r['width'] and r['y']<=req.y<=r['y']+r['height'] for r in await challenge_regions(ctx))
+            if not matched:raise HTTPException(403,'Coordinate click is restricted to observed CAPTCHA images or challenge frames')
+            await ctx.page.mouse.click(req.x,req.y)
+        else:raise HTTPException(422,'Unsupported human control')
+        after=await observe(ctx)
+        convert(after,info);info.fingerprint=ctx.fingerprint
+        return {'ok':True,'page_changed':True}
+
+
+@router.post('/session/{sid}/human-finish')
+async def human_finish(sid:str,req:HumanBegin,x_internal_key:str|None=Header(None)):
+    worker().require_key(x_internal_key)
+    info,ctx=get(sid);ensure_human(info,req.task_id)
+    async with ctx.lock:
+        obs=await observe(ctx)
+        # A citizen attestation is not proof that the challenge was solved;
+        # core receives an explicit unverified flag and MUST re-inspect.
+        info.human_task_id=None
+        info.human_expires=0.0
+        ctx.human_captcha_until=0.0
+        info.auth_value_entered=False
+        convert(obs,info);info.fingerprint=ctx.fingerprint
+        return {'state':'resumed','verified':False,'still_waiting_human':bool(obs['human_signals']),
+                'observation_id':obs['observation_id']}
+
+
+@router.post('/session/{sid}/human-cancel')
+async def human_cancel(sid:str,req:HumanBegin,x_internal_key:str|None=Header(None)):
+    worker().require_key(x_internal_key)
+    info,ctx=get(sid)
+    async with ctx.lock:
+        ensure_human(info,req.task_id)
+        info.human_task_id=None;info.human_expires=0.0;ctx.human_captcha_until=0.0
+    return {'state':'cancelled'}
 
 
 @router.delete('/session/{sid}')

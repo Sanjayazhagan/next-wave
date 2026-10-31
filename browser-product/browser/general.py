@@ -16,11 +16,21 @@ from fastapi import HTTPException
 from playwright.async_api import Error as BrowserError
 from browser.protocol import BrowserAction
 from browser.public_web import assert_public_url, public_url_syntax
+from browser.step_policy import category, final_path
+
+# Human-only CAPTCHA providers; no agent-side solver or challenge bypass.
+CAPTCHA_PROVIDER_SUFFIXES=('recaptcha.net','google.com','hcaptcha.com','challenges.cloudflare.com','turnstile.cloudflare.com')
+
+def trusted_captcha_provider(url):
+    p=urlsplit(url)
+    host=(p.hostname or '').lower()
+    return p.scheme=='https' and any(host==suffix or host.endswith('.'+suffix) for suffix in CAPTCHA_PROVIDER_SUFFIXES) and bool(re.search(r'captcha|recaptcha|hcaptcha|turnstile|challenge', p.path, re.I))
+
 
 CONTROLS='a[href],button,input:not([type=hidden]),select,textarea,[role=button],[role=link],[role=checkbox],[contenteditable=true]'
 AUTH=re.compile(r'password|one.?time|\botp\b|captcha|verification code|security code|face.?auth',re.I)
 IDENTIFIER=re.compile(r'aadhaar|aadhar|bank|account.?number|card.?number|passport|national.?id|cc-number',re.I)
-IRREVERSIBLE=re.compile(r'submit|finali[sz]e|confirm|pay\b|purchase|delete|remove.?account|sign.?out|logout|approve|apply.?now|register|send.?otp',re.I)
+IRREVERSIBLE=re.compile(r'submit|finali[sz]e|confirm.?application|pay\b|purchase|delete|remove.?account|approve.?application|apply.?now|register.?account',re.I)
 
 
 def origin(url):
@@ -70,6 +80,8 @@ class GeneralContext:
     tab_ids:dict=field(default_factory=dict)
     action_results:dict=field(default_factory=dict)
     dialogs:list=field(default_factory=list)
+    write_scope:tuple|None=None  # (origin, intent); active only during a vetted click
+    human_captcha_until:float=0.0
 
     def permitted(self,url):
         if self.public_web:
@@ -96,12 +108,19 @@ class GeneralContext:
         if not self.permitted(url):
             return await route.abort('blockedbyclient')
         if method not in ('GET','HEAD','OPTIONS'):
-            if method != 'POST' or not intermediate_post_permitted(url,public_web=self.public_web):
+            scoped = (self.write_scope is not None and method == 'POST'
+                      and origin(url) == self.write_scope[0]
+                      and self.write_scope[1] in ('otp_send','otp_verify','human_challenge'))
+            # Provider POSTs needed for manual CAPTCHA completion. Enabled
+            # only during a scoped live human task and only to known HTTPS
+            # challenge endpoints; never generic agent or site POST permission.
+            captcha_scoped = method=='POST' and time.time()<self.human_captcha_until and trusted_captcha_provider(url)
+            if not (scoped or captcha_scoped) and (method != 'POST' or not intermediate_post_permitted(url,public_web=self.public_web)):
                 return await route.abort('blockedbyclient')
         # A path that suggests final submission remains forbidden as a generic
         # request, including from scripts. A real integration must use a
         # separately audited, site-specific approval adapter for these URLs.
-        if IRREVERSIBLE.search(urlsplit(url).path+' '+urlsplit(url).query):
+        if final_path(url) or IRREVERSIBLE.search(urlsplit(url).path+' '+urlsplit(url).query):
             return await route.abort('blockedbyclient')
         if self.public_web:
             try:
@@ -123,28 +142,35 @@ async def census(session):
         allowed=session.permitted(frame.url) or (frame.url in ('about:blank','about:srcdoc') and frame==session.page.main_frame)
         frames.append({'id':frame_id,'url':safe_url(frame.url),'available':allowed})
         if not allowed:continue
-        controls=frame.locator(CONTROLS)
-        count=await controls.count()
-        for index in range(min(count,250-len(elements))):
-            loc=controls.nth(index)
+        # Scan form controls first: long government-portal navigation menus
+        # otherwise exhaust the 250-element budget before reaching any inputs.
+        priority=frame.locator('input:not([type=hidden]),select,textarea,button,[role=button],[role=checkbox],[contenteditable=true]')
+        links=frame.locator('a[href],[role=link]')
+        primary_count=await priority.count();link_count=await links.count()
+        count=primary_count+link_count
+        frame_local_index=0
+        for group,available in ((priority,primary_count),(links,link_count)):
+          for offset in range(min(available, 50) if group is links else available):
+            if len(elements)>=250:break
+            index=frame_local_index;frame_local_index+=1
+            loc=group.nth(offset)
             if not await loc.is_visible():
                 # Real forms commonly hide native file inputs behind styled
                 # labels/buttons. Playwright set_input_files still works on
                 # these inputs; expose them as fileupload, not textbox.
                 if await loc.get_attribute('type') != 'file':
                     continue
-            data=await loc.evaluate(r'''e=>({tag:e.tagName.toLowerCase(),type:e.getAttribute('type')||'',role:e.getAttribute('role')||'',label:(e.labels?[...e.labels].map(x=>x.innerText).join(' '):'')||e.getAttribute('aria-label')||e.getAttribute('title')||e.getAttribute('placeholder')||e.innerText||e.getAttribute('name')||'',name:e.getAttribute('name')||'',required:e.required||e.getAttribute('aria-required')==='true',disabled:e.disabled||e.getAttribute('aria-disabled')==='true',value:e.type==='file'?'':(e.value||(e.isContentEditable?e.innerText:'')),href:e.getAttribute('href')||'',options:e.tagName==='SELECT'?[...e.options].slice(0,80).map(o=>({value:o.value,label:o.text,disabled:o.disabled})):[],checked:!!e.checked,form:!!e.form,accept:e.getAttribute('accept')||'',autocomplete:e.getAttribute('autocomplete')||'',readonly:!!e.readOnly,multiple:!!e.multiple,min:e.getAttribute('min'),max:e.getAttribute('max'),maxlength:e.getAttribute('maxlength'),pattern:e.getAttribute('pattern'),description:(e.getAttribute('aria-describedby')||'').split(/\s+/).map(id=>e.ownerDocument.getElementById(id)?.innerText||'').join(' ').slice(0,500),upload_hint:e.type==='file'?(e.closest('label')?.innerText||e.parentElement?.innerText||'').slice(0,320):'',validation_message:e.validationMessage||'',file_count:e.files?.length||0,contenteditable:e.isContentEditable})''')
+            data=await loc.evaluate(r'''e=>({tag:e.tagName.toLowerCase(),type:e.getAttribute('type')||'',role:e.getAttribute('role')||'',label:(e.labels?[...e.labels].map(x=>x.innerText).join(' '):'')||e.getAttribute('aria-label')||e.getAttribute('title')||e.getAttribute('placeholder')||e.innerText||e.getAttribute('name')||'',name:e.getAttribute('name')||'',required:e.required||e.getAttribute('aria-required')==='true',disabled:e.disabled||e.getAttribute('aria-disabled')==='true',value:e.type==='file'?'':(e.value||(e.isContentEditable?e.innerText:'')),href:e.getAttribute('href')||'',options:e.tagName==='SELECT'?[...e.options].slice(0,80).map(o=>({value:o.value,label:o.text,disabled:o.disabled})):[],checked:!!e.checked,form:!!e.form,accept:e.getAttribute('accept')||'',autocomplete:e.getAttribute('autocomplete')||'',form_method:e.form?.method||'',form_action:e.form?.action||'',readonly:!!e.readOnly,multiple:!!e.multiple,min:e.getAttribute('min'),max:e.getAttribute('max'),maxlength:e.getAttribute('maxlength'),pattern:e.getAttribute('pattern'),description:(e.getAttribute('aria-describedby')||'').split(/\s+/).map(id=>e.ownerDocument.getElementById(id)?.innerText||'').join(' ').slice(0,500),upload_hint:e.type==='file'?(e.closest('label')?.innerText||e.parentElement?.innerText||'').slice(0,320):'',validation_message:e.validationMessage||'',file_count:e.files?.length||0,contenteditable:e.isContentEditable})''')
             data['label']=data['label'].strip()[:300];data['name']=data['name'][:100];data['upload_hint']=data.get('upload_hint','').strip()[:320]
             description=' '.join((data['label'],data['name'],data['type'],data['autocomplete']))
             sensitive=bool(AUTH.search(description));private=bool(IDENTIFIER.search(description))
-            # An observed "Next"/"Continue" in a form may submit an intermediate
-            # step; distinguish it from a final irreversible submit. Network
-            # writes are still blocked unless the operator opts into form POST.
-            intermediate=bool(re.search(r'^(next|continue|save (and|&) (next|continue)|proceed|previous|back)$',data['label'],re.I))
-            risky=IRREVERSIBLE.search(description+' '+data['href']) or ((data['tag']=='button' and data['form'] and data['type']!='button') or data['type'] in ('submit','image')) and not intermediate
-            risk='human_auth' if sensitive else ('irreversible' if risky else 'ordinary')
+            # Intent classification is contextual, but is not a final-submit
+            # authorization. Unknown submit controls fail closed.
+            data['category']='ordinary'
+            data['risk']='ordinary'
+            data['redacted']=sensitive or private
             ref=f'{frame_id}-element-{index}'
-            data.update(ref=ref,frame_id=frame_id,risk=risk,redacted=sensitive or private)
+            data.update(ref=ref,frame_id=frame_id)
             box=await loc.bounding_box()
             viewport=session.page.viewport_size or {'width':1180,'height':760}
             data['bounds']=box
@@ -155,9 +181,21 @@ async def census(session):
                 from urllib.parse import urljoin
                 data['href']=safe_url(urljoin(frame.url,data['href']))
             targets[ref]=loc;elements.append(data)
-        if count>250-len(elements) or len(elements)>=250:
+        if frame_local_index < count or len(elements)>=250:
             truncated=True
             if len(elements)>=250:break
+    # Form context is known only after gathering all controls, including
+    # hidden upload inputs. Reclassify the entire observation consistently.
+    has_file=any(e['type']=='file' for e in elements)
+    has_auth=any(e['redacted'] and e['tag'] in ('input','textarea') and AUTH.search(e['label']+' '+e['type']) for e in elements)
+    for e in elements:
+        kind=category(e,has_file=has_file,has_auth=has_auth)
+        e['category']=kind
+        if kind=='human_input':e['risk']='human_auth';e['redacted']=True
+        elif kind in ('final','final_unknown'):e['risk']='irreversible'
+        elif kind in ('otp_send','otp_verify'):e['risk']='human_auth'
+        elif kind=='upload_step':e['risk']='intermediate'
+        # Next/Save Draft remain ordinary controls, but POST remains reviewed.
     return elements,targets,frames,truncated
 
 

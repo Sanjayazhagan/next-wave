@@ -101,6 +101,8 @@ from server.browser_v2 import router as browser_v2_router
 app.include_router(browser_v2_router)
 from server.core_gateway import router as core_gateway_router
 app.include_router(core_gateway_router)
+from server.core_assist import router as core_assist_router
+app.include_router(core_assist_router)
 from server.browser_lab import router as browser_lab_router
 app.include_router(browser_lab_router)
 from server.conversation_bridge import router as conversation_router
@@ -159,7 +161,7 @@ async def human_task_guard(request, call_next):
         if lease:
             with conn() as db:
                 db.execute('DELETE FROM execution_leases WHERE token=?', (lease,))
-    if request.url.path.startswith(('/assist', '/integration/','/api/','/auth/')):
+    if request.url.path.startswith(('/assist', '/core-assist', '/core-browser/', '/integration/','/api/','/auth/')):
         response.headers['Cache-Control'] = 'no-store'
         response.headers['Referrer-Policy'] = 'no-referrer'
         response.headers['X-Content-Type-Options'] = 'nosniff'
