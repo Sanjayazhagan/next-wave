@@ -331,7 +331,7 @@ class Nodes:
             except BrowserError:
                 pass
         try:
-            browser_session = await self.d.browser.open(portal_id)
+            browser_session = await self.d.browser.open(portal_id, known_values(state))
         except BrowserError as exc:
             return self._strike(state, f"Could not open the portal: {exc}", retry_route="reopen")
 
@@ -624,16 +624,33 @@ class Nodes:
             image_ref = self.d.files.put(base64.b64decode(snapshot.screenshot_base64), "image/png")
 
         known = known_values(state)
+        filled = self._filled_fields(state, snapshot)
         lines = [
             f"{number}. {details['label']}: {mask_for_display(field, known.get(field, ''))}"
-            for number, (field, details) in enumerate(state.get("filled", {}).items(), start=1)
+            for number, (field, details) in enumerate(filled.items(), start=1)
         ]
         report = state.get("doctor_report")
         if report and report["mismatches"]:
             lines.append(f"\n{messages.REVIEW_FLAGS}")
             lines += [f"- {m['field']}: {m['detail']}" for m in report["mismatches"]]
         text = f"{messages.REVIEW_INTRO}\n\n" + "\n".join(lines)
-        return {"review": {"text": text, "image_ref": image_ref}}
+        return {"review": {"text": text, "image_ref": image_ref}, "filled": filled}
+
+    @staticmethod
+    def _filled_fields(state: AgentState, snapshot: Snapshot) -> dict[str, dict[str, Any]]:
+        """A managed portal fills the form itself, so it reports what it filled."""
+        if not snapshot.managed_fields:
+            return state.get("filled", {})
+        fields = profile_of(state).fields
+        return {
+            name: {
+                "label": label,
+                "source_document": fields[name].source_document,
+                "confidence": fields[name].confidence,
+            }
+            for name, label in snapshot.managed_fields.items()
+            if name in fields
+        }
 
     async def review(self, state: AgentState) -> dict[str, Any]:
         review = state["review"]

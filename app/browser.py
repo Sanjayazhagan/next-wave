@@ -25,7 +25,7 @@ class BrowserSessionLost(BrowserError):
 
 
 class BrowserWorker(Protocol):
-    async def open(self, portal_id: str) -> str: ...
+    async def open(self, portal_id: str, fields: dict[str, str] | None = None) -> str: ...
 
     async def login(self, session_id: str, portal_user_id: str) -> Snapshot: ...
 
@@ -54,7 +54,7 @@ class HttpBrowserWorker:
             raise BrowserError(f"Browser worker answered {response.status_code}")
         return response
 
-    async def open(self, portal_id: str) -> str:
+    async def open(self, portal_id: str, fields: dict[str, str] | None = None) -> str:
         body = OpenRequest(portal_id=portal_id).model_dump()
         response = await self._request("POST", "/session", json=body)
         return OpenResponse.model_validate(response.json()).session_id

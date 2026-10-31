@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     default_language: str = "en"
     choose_language: bool = True  # Ask for a language before anything else.
     browser_worker_url: str = ""
+    # The browser service in browser-product/, which takes over from the two above.
+    browser_product_url: str = ""
+    browser_product_key: str = ""
 
     # Runs a fake portal and fake extraction, so the loop can be tried end to end.
     use_standins: bool = False

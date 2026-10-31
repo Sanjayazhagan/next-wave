@@ -48,6 +48,8 @@ class Snapshot(BaseModel):
     session_expired: bool = False  # True triggers a re-login.
     error: str | None = None
     receipt_number: str | None = None
+    # Profile field -> label, for portals that fill the form without typing steps.
+    managed_fields: dict[str, str] = {}
 
     def find(self, target: Target) -> PageNode | None:
         for node in self.nodes:

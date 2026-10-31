@@ -1,5 +1,7 @@
+import asyncio
 import base64
 import hashlib
+import inspect
 import hmac
 import io
 import json
@@ -31,6 +33,16 @@ FIELD_FOR_LABEL = {
     "Date of birth": "date_of_birth",
     "Annual income": "annual_income",
 }
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_pyfunc_call(pyfuncitem: pytest.Function) -> bool | None:
+    """Run `async def` tests, so no extra pytest plugin is needed."""
+    if not inspect.iscoroutinefunction(pyfuncitem.obj):
+        return None
+    arguments = {name: pyfuncitem.funcargs[name] for name in pyfuncitem._fixtureinfo.argnames}
+    asyncio.run(pyfuncitem.obj(**arguments))
+    return True
 
 
 def tone_wav() -> bytes:

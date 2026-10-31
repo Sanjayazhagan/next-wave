@@ -13,6 +13,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from app.api import router as session_router
 from app.assistant import Assistant
 from app.browser import BrowserWorker, HttpBrowserWorker
+from app.browser_product import BrowserProductWorker
 from app.channels import ChannelError, RoutedChannel
 from app.config import Settings
 from app.conversation import ConversationContext
@@ -72,9 +73,14 @@ def create_app(
         loaded = plugins or load_plugins()
         if settings.use_standins and loaded.extraction is None:
             loaded.extraction = StubExtractor()
-        worker = browser or (
-            StubBrowser() if settings.use_standins else HttpBrowserWorker(settings, client)
-        )
+        if browser is not None:
+            worker = browser
+        elif settings.browser_product_url:
+            worker = BrowserProductWorker(settings, client)
+        elif settings.use_standins:
+            worker = StubBrowser()
+        else:
+            worker = HttpBrowserWorker(settings, client)
 
         settings.checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
         connection = await aiosqlite.connect(settings.checkpoint_path)

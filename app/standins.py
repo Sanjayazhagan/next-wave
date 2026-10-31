@@ -62,7 +62,7 @@ class StubBrowser:
             raise BrowserSessionLost(session_id)
         return self.sessions[session_id]
 
-    async def open(self, portal_id: str) -> str:
+    async def open(self, portal_id: str, fields: dict[str, str] | None = None) -> str:
         session_id = uuid.uuid4().hex
         self.sessions[session_id] = _Page()
         return session_id
