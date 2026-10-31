@@ -1,3 +1,23 @@
+# GradientZero Browser Product — live agent integration branch
+
+**NEW (31 Oct 2026):** This browser service now integrates with the teammate's
+existing next-wave LangGraph. The core remains the LLM/agent; this service
+executes observed, approved browser actions. See
+[docs/MAIN_AGENT_INTEGRATION.md](docs/MAIN_AGENT_INTEGRATION.md) and
+[docs/WORKER_HANDOFF_TO_CODEX.md](docs/WORKER_HANDOFF_TO_CODEX.md).
+
+For the four **optional, reviewable** core compatibility edits see
+[integrations/next_wave_main_patch](integrations/next_wave_main_patch). The
+teammate's existing `main` code is **not included or replaced** here.
+
+**Integrated is not synonymous with production ready.** The operator must
+configure an approved origin/portal registry; real sites and the full chat →
+agent → browser → receipt workflow still need evidence from authorized tests.
+The bundled synthetic portal remains isolated for regression testing, not for
+claiming real government submission. No real government integration is claimed.
+
+---
+
 # GradientZero / CivicFlow — FORGE '26 Browser & Product Teammate
 
 **Track 1 · Problem 3 — Autonomous Public Service & Bureaucracy Execution Agent.**

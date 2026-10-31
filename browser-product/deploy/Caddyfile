@@ -5,12 +5,6 @@
 {$DEMO_HOST} {
     encode zstd gzip
 
-    # This gates every dashboard, API, SSE and screenshot path.
-    # Credentials are for a fictional-data DEMO; not citizen authentication.
-    basic_auth {
-        {$DEMO_USER} {$DEMO_PASSWORD_HASH}
-    }
-
     header {
         X-Content-Type-Options nosniff
         X-Frame-Options DENY
@@ -18,8 +12,24 @@
         -Server
     }
 
-    reverse_proxy api:8000 {
-        # Preserve delivery of the agent event stream without waiting for buffers.
-        flush_interval -1
+    # Server-to-server LangGraph integration: key-authenticated inside FastAPI.
+    # Caddy basic auth would otherwise block main's HTTP client. NEVER place
+    # INTERNAL_KEY in client-side JS, URLs or Git. Restrict ingress if possible.
+    @core path /core-browser/*
+    handle @core {
+        reverse_proxy api:8000 {
+            flush_interval -1
+        }
+    }
+
+    # Human UI and all remaining routes retain a second layer of basic auth.
+    # Signed application identity is additionally required in integrated mode.
+    handle {
+        basic_auth {
+            {$DEMO_USER} {$DEMO_PASSWORD_HASH}
+        }
+        reverse_proxy api:8000 {
+            flush_interval -1
+        }
     }
 }

@@ -55,7 +55,15 @@ class GeneralContext:
         except ValueError:return False
 
     async def route(self,route):
-        if self.permitted(route.request.url) and route.request.method in ('GET','HEAD','OPTIONS') and not IRREVERSIBLE.search(urlsplit(route.request.url).path+' '+urlsplit(route.request.url).query):return await route.continue_()
+        # Form POSTs are explicitly operator-controlled, off by default. Many real
+        # portals POST even for intermediate Next/Save operations; no generic
+        # agent gets to extend the allowlist or enable these methods.
+        import os
+        permitted_methods=('GET','HEAD','OPTIONS')
+        if os.getenv('BROWSER_ALLOW_FORM_POST','false').lower()=='true':
+            permitted_methods+=('POST',)
+        if self.permitted(route.request.url) and route.request.method in permitted_methods and not IRREVERSIBLE.search(urlsplit(route.request.url).path+' '+urlsplit(route.request.url).query):
+            return await route.continue_()
         return await route.abort('blockedbyclient')
 
     def tab_id(self,page):
@@ -80,7 +88,12 @@ async def census(session):
             data['label']=data['label'].strip()[:300];data['name']=data['name'][:100]
             description=' '.join((data['label'],data['name'],data['type'],data['autocomplete']))
             sensitive=bool(AUTH.search(description));private=bool(IDENTIFIER.search(description))
-            risk='human_auth' if sensitive else ('irreversible' if IRREVERSIBLE.search(description+' '+data['href']) or (data['tag']=='button' and data['form'] and data['type']!='button') or data['type'] in ('submit','image') else 'ordinary')
+            # An observed "Next"/"Continue" in a form may submit an intermediate
+            # step; distinguish it from a final irreversible submit. Network
+            # writes are still blocked unless the operator opts into form POST.
+            intermediate=bool(re.search(r'^(next|continue|save (and|&) (next|continue)|proceed|previous|back)$',data['label'],re.I))
+            risky=IRREVERSIBLE.search(description+' '+data['href']) or ((data['tag']=='button' and data['form'] and data['type']!='button') or data['type'] in ('submit','image')) and not intermediate
+            risk='human_auth' if sensitive else ('irreversible' if risky else 'ordinary')
             ref=f'{frame_id}-element-{index}'
             data.update(ref=ref,frame_id=frame_id,risk=risk,redacted=sensitive or private)
             box=await loc.bounding_box()
@@ -101,7 +114,11 @@ async def census(session):
 
 async def signature(session):
     elements,targets,frames,truncated=await census(session)
-    fingerprint=hashlib.sha256(json.dumps({'url':session.page.url,'elements':elements,'frames':frames},sort_keys=True).encode()).hexdigest()
+    # Include visible semantic text in freshness check, not only controls:
+    # a site may replace the review content without modifying inputs/buttons.
+    visible=await session.page.locator('body').inner_text(timeout=5000)
+    fingerprint=hashlib.sha256(json.dumps({'url':session.page.url,'elements':elements,'frames':frames,
+        'visible_text_sha256':hashlib.sha256(visible[:30000].encode()).hexdigest()},sort_keys=True).encode()).hexdigest()
     return fingerprint,elements,targets,frames,truncated
 
 
@@ -140,7 +157,7 @@ async def observe(session):
     human_signals=[{'kind':'authentication_control','target_ref':e['ref']} for e in elements if e['risk']=='human_auth']
     for f in frames:
         if re.search(r'captcha|turnstile|face.?auth',f['url'],re.I):human_signals.append({'kind':'challenge_frame','frame_id':f['id']})
-    return {'version':'2','context_id':session.id,'generation':session.generation,'observation_id':session.observation_id,'url':safe_url(session.page.url),'title':await session.page.title(),'observed_at':session.observed_at,'viewport':session.page.viewport_size,'elements':redact(elements),'frames':redact(frames),'tabs':redact(tabs),'structure':redact(structure),'text':redact(visible_text),'accessibility':redact(accessibility),'dialogs':session.dialogs[-10:],'screenshot_base64':base64.b64encode(screenshot).decode(),'screenshot_mime':'image/jpeg','truncated':truncated,'waiting_human':bool(human_signals),'human_signals':human_signals,'content_trust':'untrusted_website_data','policy':{'generic_submit':False,'origins':sorted(session.allowed),'network_methods':['GET','HEAD','OPTIONS']},'warnings':['No model is connected by this endpoint. Core must interpret these observations.']}
+    return {'version':'2','context_id':session.id,'generation':session.generation,'observation_id':session.observation_id,'url':safe_url(session.page.url),'title':await session.page.title(),'observed_at':session.observed_at,'viewport':session.page.viewport_size,'elements':redact(elements),'frames':redact(frames),'tabs':redact(tabs),'structure':redact(structure),'text':redact(visible_text),'accessibility':redact(accessibility),'dialogs':session.dialogs[-10:],'screenshot_base64':base64.b64encode(screenshot).decode(),'screenshot_mime':'image/jpeg','truncated':truncated,'waiting_human':bool(human_signals),'human_signals':human_signals,'content_trust':'untrusted_website_data','policy':{'generic_submit':False,'origins':sorted(session.allowed),'network_methods':['GET','HEAD','OPTIONS']+(['POST'] if __import__('os').getenv('BROWSER_ALLOW_FORM_POST','false').lower()=='true' else [])},'warnings':['No model is connected by this endpoint. Core must interpret these observations.']}
 
 
 async def act(session,req:BrowserAction,upload=None):

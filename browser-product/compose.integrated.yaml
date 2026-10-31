@@ -1,0 +1,22 @@
+# Run together with compose.yaml and compose.vm.yaml on a private Mumbai VM.
+# This overlay fails if required secure environment variables are missing.
+services:
+  api:
+    environment:
+      APP_MODE: integrated
+      SECURITY_MODE: signed
+      INTERNAL_KEY: ${INTERNAL_KEY:?Set random INTERNAL_KEY}
+      APP_SIGNING_KEY: ${APP_SIGNING_KEY:?Set distinct signing key}
+      IDENTITY_SIGNING_KEY: ${IDENTITY_SIGNING_KEY:?Set distinct 32+ char signing key}
+      DATA_ENCRYPTION_KEYS: ${DATA_ENCRYPTION_KEYS:?Set encryption key}
+      BROWSER_ALLOWED_ORIGINS: ${BROWSER_ALLOWED_ORIGINS:?Set reviewed allowed origins}
+      BROWSER_PORTALS_JSON: ${BROWSER_PORTALS_JSON:?Set portal registry as JSON}
+  worker:
+    environment:
+      APP_MODE: integrated
+      INTERNAL_KEY: ${INTERNAL_KEY:?Set random INTERNAL_KEY}
+      APP_SIGNING_KEY: ${APP_SIGNING_KEY:?Set distinct signing key}
+      BROWSER_ALLOWED_ORIGINS: ${BROWSER_ALLOWED_ORIGINS:?Set reviewed allowed origins}
+      BROWSER_PORTALS_JSON: ${BROWSER_PORTALS_JSON:?Set portal registry as JSON}
+      BROWSER_ALLOW_FORM_POST: ${BROWSER_ALLOW_FORM_POST:-false}
+      BROWSER_ENABLE_FINAL_SUBMIT: ${BROWSER_ENABLE_FINAL_SUBMIT:-false}

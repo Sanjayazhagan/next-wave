@@ -52,8 +52,10 @@ async def reap_idle():
 
 @asynccontextmanager
 async def lifespan(app):
-    if MODE != 'demo':
-        raise RuntimeError('Only APP_MODE=demo is implemented. Production authentication and portal approval missing.')
+    if MODE not in ('demo','integrated'):
+        raise RuntimeError('APP_MODE must be demo or integrated')
+    if MODE=='integrated' and (not os.getenv('BROWSER_ALLOWED_ORIGINS') or not os.getenv('BROWSER_PORTALS_JSON')):
+        raise RuntimeError('Integrated browser requires explicit origins and portal registry')
     if not INTERNAL_KEY or not SIGN_KEY:
         raise RuntimeError('Internal keys required')
     p = await async_playwright().start()
@@ -83,6 +85,8 @@ async def lifespan(app):
 app = FastAPI(title='GradientZero Internal Browser Worker', lifespan=lifespan, docs_url=None, redoc_url=None)
 from browser.general_routes import router as general_router
 app.include_router(general_router)
+from browser.core_compat import router as core_compat_router
+app.include_router(core_compat_router)
 
 def require_key(x_internal_key: str | None):
     if not x_internal_key or not hmac.compare_digest(x_internal_key, INTERNAL_KEY):

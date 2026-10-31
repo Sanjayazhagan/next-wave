@@ -1,3 +1,27 @@
+# Highest-priority latest scope — 31 October 2026 (supersedes old deferral notes)
+
+**Do NOT build a second agent or treat the demo as the product.**
+Main `Sanjayazhagan/next-wave` runs the actual LangGraph, model, chat channels,
+consent/approval and vault. This feature branch owns the live browser execution
+and product. Read `docs/MAIN_AGENT_INTEGRATION.md`,
+`docs/AGENTIC_INTEGRATION_RELEASE.md`, and
+`docs/WORKER_HANDOFF_TO_CODEX.md` FIRST. Browser API:
+`/core-browser/session` → private Playwright `/core/session`. Review the small
+four-file `integrations/next_wave_main_reviewable.patch` before suggesting
+changes to the teammate's main; do NOT overwrite his main automatically.
+
+**Deployment is now explicitly requested again.** Prior messages below saying
+"deployment deferred" are stale. Actual Mumbai VM deployment and real-site
+verification remain uncompleted and are P0. Never report them as done.
+
+`APP_MODE=integrated` activates operator-reviewed portal navigation; see
+`compose.integrated.yaml` and signed auth requirements. This is not a claim
+of production certification. OTP/CAPTCHA/security controls remain human-only,
+last submit requires fresh citizen approval, and real portal authorizations
+must be established. The main agent decides which actions to take.
+
+---
+
 # Codex agent instructions — GradientZero Browser & Product
 
 ## Latest user scope (31 October 2026 IST)
