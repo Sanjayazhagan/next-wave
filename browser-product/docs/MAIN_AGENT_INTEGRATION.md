@@ -55,9 +55,9 @@ ALLOW_REAL_SUBMIT=false
 ```
 
 The existing core has **no built-in way** to send this service key or to
-authorize the final reviewed click, so apply the four-file patch in
-`integrations/next_wave_main_patch` only after review. It intentionally leaves
-all agent/planner/channel logic and core deployment intact.
+authorize the final reviewed click, so compare against the *latest* main branch and make only localized changes
+as described in `docs/BRIDGE_FIX_HANDOFF_OCT31.md`. The old copied-file patch
+was removed because it no longer applies cleanly; do not overwrite nodes.py.
 
 ## Important real-world limits
 
@@ -101,3 +101,8 @@ all agent/planner/channel logic and core deployment intact.
 Browser Product + Playwright should be on a Mumbai VM behind HTTPS/reverse
 proxy, with worker private and an explicitly verified outbound destination
 allowlist. No Mumbai VM deployment is claimed by this package.
+
+
+## NEW: Discover a public site at runtime (no env change per website)
+
+The Browser Product service now supports `BROWSER_NAVIGATION_MODE=public-web`. See `docs/DYNAMIC_PUBLIC_WEB.md`. The core can call `POST /core-browser/session` with `{"url":"https://www.wikipedia.org/wiki/Playwright","consent_ref":"citizen-consent-2026-10-31-001"}` rather than `{"portal_id":"registered-portal"}`. The former requires explicit consent tracking in the core service; the browser currently validates the reference format, not its provenance. The existing main branch is NOT modified. Adapt its `OpenRequest`/`HttpBrowserWorker.open` only when the teammate is ready, or use the v2 general browser API. Navigation to a new public HTTPS destination no longer requires restarting the browser or changing `.env`.

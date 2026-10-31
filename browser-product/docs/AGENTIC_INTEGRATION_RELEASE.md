@@ -20,9 +20,9 @@ than the demo implementation.
   grounding, DOM/text freshness checks, human-provided OTP/challenge answers,
   field provenance, no OTP storage/replay, no unapproved final submit, guarded
   POST and failure-on-uncertain-receipt.
-- Main integration: **four** optional, small file edits carried in
-  `integrations/next_wave_main_reviewable.patch` (NOT applied to teammate's
-  GitHub main). Core LLM and LangGraph nodes otherwise remain as they are.
+- Main integration: the older four-file patch was **removed** after it became
+  incompatible with the teammate's updated main. Guidance is in
+  `docs/BRIDGE_FIX_HANDOFF_OCT31.md`. Core LLM and LangGraph nodes remain untouched.
 - Real-page mode: `APP_MODE=integrated`, signed identity requirement,
   operator-approved portal URLs, default-disabled form POST/final submit, and
   the synthetic website routes hidden.
@@ -39,8 +39,7 @@ than the demo implementation.
   ordinary button click, verified field fill, stale-visible-review detection,
   review-observation-bound submit approval, single use, and receipt matching
   on synthetic content. Gateway key and forwarding tested.
-- `git apply --check integrations/next_wave_main_reviewable.patch` succeeds
-  against the provided `next-wave-main.zip` snapshot.
+- The outdated main patch is not shipped. No main branch integration is claimed by this release.
 - Python files compile; Docker Compose YAML parses with PyYAML.
 
 ## Not verified / cannot claim

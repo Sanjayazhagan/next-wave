@@ -15,6 +15,7 @@ from urllib.parse import urlsplit,urlunsplit
 from fastapi import HTTPException
 from playwright.async_api import Error as BrowserError
 from browser.protocol import BrowserAction
+from browser.public_web import assert_public_url, public_url_syntax
 
 CONTROLS='a[href],button,input:not([type=hidden]),select,textarea,[role=button],[role=link],[role=checkbox],[contenteditable=true]'
 AUTH=re.compile(r'password|one.?time|\botp\b|captcha|verification code|security code|face.?auth',re.I)
@@ -33,11 +34,31 @@ def safe_url(url):
     p=urlsplit(url);return urlunsplit((p.scheme,p.netloc,p.path,'',''))
 
 
+
+def intermediate_post_permitted(url:str,*,public_web:bool)->bool:
+    """POST allowed only on operator-reviewed exact origins in public-web mode.
+
+    Historical BROWSER_ALLOW_FORM_POST is retained for fixed-origin
+    development only. Never enable it as a wildcard for arbitrary websites.
+    This policy does not authorize final submission and can't classify an
+    arbitrary POST as merely intermediate; deployments must audit each site.
+    """
+    import os
+    try:
+        dest=origin(url)
+        reviewed={origin(u.strip()) for u in os.getenv('BROWSER_INTERMEDIATE_POST_ORIGINS','').split(',') if u.strip()}
+        if dest in reviewed:
+            return True
+        return not public_web and os.getenv('BROWSER_ALLOW_FORM_POST','false').lower()=='true'
+    except ValueError:
+        return False
+
 @dataclass
 class GeneralContext:
     context:object
     page:object
     allowed:set[str]
+    public_web:bool=False
     id:str=field(default_factory=lambda:str(uuid.uuid4()))
     generation:str=field(default_factory=lambda:str(uuid.uuid4()))
     lock:asyncio.Lock=field(default_factory=asyncio.Lock)
@@ -51,20 +72,43 @@ class GeneralContext:
     dialogs:list=field(default_factory=list)
 
     def permitted(self,url):
+        if self.public_web:
+            try:
+                public_url_syntax(url)
+                return True
+            except ValueError:
+                return False
         try:return origin(url) in self.allowed
         except ValueError:return False
 
+    async def check_destination(self,url):
+        if not self.permitted(url):
+            raise HTTPException(403,'Navigation destination is not permitted')
+        if self.public_web:
+            await assert_public_url(url)
+
     async def route(self,route):
-        # Form POSTs are explicitly operator-controlled, off by default. Many real
-        # portals POST even for intermediate Next/Save operations; no generic
-        # agent gets to extend the allowlist or enable these methods.
-        import os
-        permitted_methods=('GET','HEAD','OPTIONS')
-        if os.getenv('BROWSER_ALLOW_FORM_POST','false').lower()=='true':
-            permitted_methods+=('POST',)
-        if self.permitted(route.request.url) and route.request.method in permitted_methods and not IRREVERSIBLE.search(urlsplit(route.request.url).path+' '+urlsplit(route.request.url).query):
-            return await route.continue_()
-        return await route.abort('blockedbyclient')
+        # Ordinary reading works across public HTTPS destinations. Writes do
+        # NOT: intermediate form POSTs require an exact operator-reviewed
+        # origin, even in public-web mode. This is not a final-submit bypass.
+        method = route.request.method.upper()
+        url = route.request.url
+        if not self.permitted(url):
+            return await route.abort('blockedbyclient')
+        if method not in ('GET','HEAD','OPTIONS'):
+            if method != 'POST' or not intermediate_post_permitted(url,public_web=self.public_web):
+                return await route.abort('blockedbyclient')
+        # A path that suggests final submission remains forbidden as a generic
+        # request, including from scripts. A real integration must use a
+        # separately audited, site-specific approval adapter for these URLs.
+        if IRREVERSIBLE.search(urlsplit(url).path+' '+urlsplit(url).query):
+            return await route.abort('blockedbyclient')
+        if self.public_web:
+            try:
+                await assert_public_url(url)
+            except HTTPException:
+                return await route.abort('blockedbyclient')
+        return await route.continue_()
 
     def tab_id(self,page):
         if page not in self.tab_ids:self.tab_ids[page]=str(uuid.uuid4())
@@ -83,9 +127,14 @@ async def census(session):
         count=await controls.count()
         for index in range(min(count,250-len(elements))):
             loc=controls.nth(index)
-            if not await loc.is_visible():continue
-            data=await loc.evaluate(r'''e=>({tag:e.tagName.toLowerCase(),type:e.getAttribute('type')||'',role:e.getAttribute('role')||'',label:(e.labels?[...e.labels].map(x=>x.innerText).join(' '):'')||e.getAttribute('aria-label')||e.getAttribute('title')||e.getAttribute('placeholder')||e.innerText||e.getAttribute('name')||'',name:e.getAttribute('name')||'',required:e.required||e.getAttribute('aria-required')==='true',disabled:e.disabled||e.getAttribute('aria-disabled')==='true',value:e.type==='file'?'':(e.value||(e.isContentEditable?e.innerText:'')),href:e.getAttribute('href')||'',options:e.tagName==='SELECT'?[...e.options].slice(0,80).map(o=>({value:o.value,label:o.text,disabled:o.disabled})):[],checked:!!e.checked,form:!!e.form,accept:e.getAttribute('accept')||'',autocomplete:e.getAttribute('autocomplete')||'',readonly:!!e.readOnly,multiple:!!e.multiple,min:e.getAttribute('min'),max:e.getAttribute('max'),maxlength:e.getAttribute('maxlength'),pattern:e.getAttribute('pattern'),description:(e.getAttribute('aria-describedby')||'').split(/\s+/).map(id=>e.ownerDocument.getElementById(id)?.innerText||'').join(' ').slice(0,500),validation_message:e.validationMessage||'',file_count:e.files?.length||0,contenteditable:e.isContentEditable})''')
-            data['label']=data['label'].strip()[:300];data['name']=data['name'][:100]
+            if not await loc.is_visible():
+                # Real forms commonly hide native file inputs behind styled
+                # labels/buttons. Playwright set_input_files still works on
+                # these inputs; expose them as fileupload, not textbox.
+                if await loc.get_attribute('type') != 'file':
+                    continue
+            data=await loc.evaluate(r'''e=>({tag:e.tagName.toLowerCase(),type:e.getAttribute('type')||'',role:e.getAttribute('role')||'',label:(e.labels?[...e.labels].map(x=>x.innerText).join(' '):'')||e.getAttribute('aria-label')||e.getAttribute('title')||e.getAttribute('placeholder')||e.innerText||e.getAttribute('name')||'',name:e.getAttribute('name')||'',required:e.required||e.getAttribute('aria-required')==='true',disabled:e.disabled||e.getAttribute('aria-disabled')==='true',value:e.type==='file'?'':(e.value||(e.isContentEditable?e.innerText:'')),href:e.getAttribute('href')||'',options:e.tagName==='SELECT'?[...e.options].slice(0,80).map(o=>({value:o.value,label:o.text,disabled:o.disabled})):[],checked:!!e.checked,form:!!e.form,accept:e.getAttribute('accept')||'',autocomplete:e.getAttribute('autocomplete')||'',readonly:!!e.readOnly,multiple:!!e.multiple,min:e.getAttribute('min'),max:e.getAttribute('max'),maxlength:e.getAttribute('maxlength'),pattern:e.getAttribute('pattern'),description:(e.getAttribute('aria-describedby')||'').split(/\s+/).map(id=>e.ownerDocument.getElementById(id)?.innerText||'').join(' ').slice(0,500),upload_hint:e.type==='file'?(e.closest('label')?.innerText||e.parentElement?.innerText||'').slice(0,320):'',validation_message:e.validationMessage||'',file_count:e.files?.length||0,contenteditable:e.isContentEditable})''')
+            data['label']=data['label'].strip()[:300];data['name']=data['name'][:100];data['upload_hint']=data.get('upload_hint','').strip()[:320]
             description=' '.join((data['label'],data['name'],data['type'],data['autocomplete']))
             sensitive=bool(AUTH.search(description));private=bool(IDENTIFIER.search(description))
             # An observed "Next"/"Continue" in a form may submit an intermediate
@@ -157,7 +206,7 @@ async def observe(session):
     human_signals=[{'kind':'authentication_control','target_ref':e['ref']} for e in elements if e['risk']=='human_auth']
     for f in frames:
         if re.search(r'captcha|turnstile|face.?auth',f['url'],re.I):human_signals.append({'kind':'challenge_frame','frame_id':f['id']})
-    return {'version':'2','context_id':session.id,'generation':session.generation,'observation_id':session.observation_id,'url':safe_url(session.page.url),'title':await session.page.title(),'observed_at':session.observed_at,'viewport':session.page.viewport_size,'elements':redact(elements),'frames':redact(frames),'tabs':redact(tabs),'structure':redact(structure),'text':redact(visible_text),'accessibility':redact(accessibility),'dialogs':session.dialogs[-10:],'screenshot_base64':base64.b64encode(screenshot).decode(),'screenshot_mime':'image/jpeg','truncated':truncated,'waiting_human':bool(human_signals),'human_signals':human_signals,'content_trust':'untrusted_website_data','policy':{'generic_submit':False,'origins':sorted(session.allowed),'network_methods':['GET','HEAD','OPTIONS']+(['POST'] if __import__('os').getenv('BROWSER_ALLOW_FORM_POST','false').lower()=='true' else [])},'warnings':['No model is connected by this endpoint. Core must interpret these observations.']}
+    return {'version':'2','context_id':session.id,'generation':session.generation,'observation_id':session.observation_id,'url':safe_url(session.page.url),'title':await session.page.title(),'observed_at':session.observed_at,'viewport':session.page.viewport_size,'elements':redact(elements),'frames':redact(frames),'tabs':redact(tabs),'structure':redact(structure),'text':redact(visible_text),'accessibility':redact(accessibility),'dialogs':session.dialogs[-10:],'screenshot_base64':base64.b64encode(screenshot).decode(),'screenshot_mime':'image/jpeg','truncated':truncated,'waiting_human':bool(human_signals),'human_signals':human_signals,'content_trust':'untrusted_website_data','policy':{'generic_submit':False,'origins':sorted(session.allowed) if not session.public_web else ['public-https-only'], 'navigation_mode':'public-web' if session.public_web else 'allowlist','network_methods':['GET','HEAD','OPTIONS']+(['POST'] if intermediate_post_permitted(session.page.url,public_web=session.public_web) else [])},'warnings':['No model is connected by this endpoint. Core must interpret these observations.']}
 
 
 async def act(session,req:BrowserAction,upload=None):
@@ -180,7 +229,8 @@ async def act(session,req:BrowserAction,upload=None):
         if req.kind in ('fill','select','check','upload') and (not req.verified or not req.source_ref):raise HTTPException(422,'Verified input and source_ref are required')
         if req.kind=='click' and (element['type'] in ('checkbox','radio') or element['role']=='checkbox') and (not req.verified or not req.source_ref):raise HTTPException(422,'Data-changing checkbox/radio clicks require a verified source')
     if req.kind=='navigate':
-        if not session.permitted(req.url) or IRREVERSIBLE.search(urlsplit(req.url).path+' '+urlsplit(req.url).query):raise HTTPException(403,'Navigation destination is not a permitted read-only page')
+        await session.check_destination(req.url)
+        if IRREVERSIBLE.search(urlsplit(req.url).path+' '+urlsplit(req.url).query):raise HTTPException(403,'Navigation destination resembles an irreversible action')
     if req.kind=='fill' and (element['tag'] not in ('input','textarea') and not element['contenteditable'] or element['type'] in ('file','checkbox','radio','button','submit') or element['readonly']):raise HTTPException(422,'Target is not an editable text field')
     if req.kind=='select' and element['tag']!='select':raise HTTPException(422,'Target is not a select control')
     if req.kind=='check' and element['type'] not in ('checkbox','radio'):raise HTTPException(422,'Target is not a checkbox/radio')

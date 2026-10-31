@@ -34,8 +34,9 @@ async def lifespan(app):
     if MODE == 'integrated':
         if os.getenv('SECURITY_MODE') != 'signed':
             raise RuntimeError('Integrated mode requires SECURITY_MODE=signed')
-        if not os.getenv('BROWSER_ALLOWED_ORIGINS') or not os.getenv('BROWSER_PORTALS_JSON'):
-            raise RuntimeError('Integrated mode requires operator-reviewed origins and portal registry')
+        from browser.public_web import navigation_mode, NAV_MODE_PUBLIC
+        if navigation_mode() != NAV_MODE_PUBLIC and (not os.getenv('BROWSER_ALLOWED_ORIGINS') or not os.getenv('BROWSER_PORTALS_JSON')):
+            raise RuntimeError('Allowlist mode requires operator-reviewed origins and portal registry')
         from server.storage import cipher
         cipher()
     if os.getenv('SECURITY_MODE') == 'signed':

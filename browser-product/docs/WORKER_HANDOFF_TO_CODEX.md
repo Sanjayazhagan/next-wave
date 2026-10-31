@@ -19,8 +19,7 @@ service and product frontend, not a competing agent. The browser decides
   the private Playwright worker.
 - Integrated mode (`APP_MODE=integrated`) accepts real configured origins,
   refuses synthetic portal endpoints and demands signed identity/encryption.
-- `integrations/next_wave_main_patch`: four small, reviewable file edits; do
-  NOT automatically overwrite main if it has been updated.
+- `docs/BRIDGE_FIX_HANDOFF_OCT31.md`: integration guidance against the latest main; the previous patch was removed to avoid overwriting new core code.
 - Tests: in-memory real Chromium DOM and a localhost HTTP smoke test that can
   run in environments allowing browser navigation.
 

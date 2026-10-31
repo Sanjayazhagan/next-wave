@@ -48,8 +48,8 @@ async def test_live_langgraph_bridge(monkeypatch):
             assert exc.value.status_code==422
             try:
                 sid=(await core.open_session(core.Open(portal_id='local'),w.INTERNAL_KEY))['session_id']
-            except PlaywrightError as exc:
-                if 'ERR_BLOCKED_BY_ADMINISTRATOR' in str(exc):
+            except (PlaywrightError, HTTPException) as exc:
+                if 'ERR_BLOCKED_BY_ADMINISTRATOR' in str(exc) or 'environment_blocked_by_admin' in str(exc):
                     pytest.skip('This runner blocks Chromium URL navigation; run in Docker/VM')
                 raise
             snap=await core.snapshot(sid,w.INTERNAL_KEY)

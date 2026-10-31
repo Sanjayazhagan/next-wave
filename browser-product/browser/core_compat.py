@@ -16,18 +16,22 @@ from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Header, HTTPException
+from playwright.async_api import TimeoutError as PWTimeout, Error as PWError
 from pydantic import BaseModel, Field
 
 from browser.general import GeneralContext, observe, act, origin, signature
+from browser.public_web import navigation_mode, NAV_MODE_PUBLIC, assert_public_url
 from browser.general_routes import contexts
 from browser.protocol import BrowserAction
 
 router = APIRouter(prefix='/core')
 
-# Portal identifiers resolve ONLY to operator-provided, exact HTTPS URLs (or the
-# local mock for test mode). No user-controlled URLs or selectors are accepted.
+# Legacy portal_id remains compatible. An updated core may provide a public
+# HTTPS url and a consent reference when BROWSER_NAVIGATION_MODE=public-web.
 class Open(BaseModel):
-    portal_id: str = Field(min_length=1, max_length=80)
+    portal_id: str | None = Field(default=None, min_length=1, max_length=80)
+    url: str | None = Field(default=None, min_length=10, max_length=2000)
+    consent_ref: str | None = Field(default=None, min_length=8, max_length=200)
 
 class Login(BaseModel):
     portal_user_id: str = Field(min_length=1, max_length=200)
@@ -77,7 +81,7 @@ def worker():
 
 def settings():
     try:
-        entries = json.loads(os.getenv('BROWSER_PORTALS_JSON', '{}'))
+        entries = json.loads(os.getenv('BROWSER_PORTALS_JSON') or '{}')
     except json.JSONDecodeError:
         raise HTTPException(503, 'Invalid operator portal registry')
     if not isinstance(entries, dict):
@@ -96,6 +100,7 @@ def get(sid):
 def role_of(e):
     if e.get('role') in ('button','link','checkbox','textbox','combobox','radio','spinbutton'):
         return e['role']
+    if e.get('type') == 'file' and e.get('tag') == 'input': return 'fileupload'
     if e['tag'] == 'a': return 'link'
     if e['tag'] == 'button' or e['type'] in ('button','submit','reset','image'): return 'button'
     if e['type'] in ('checkbox','radio'): return e['type']
@@ -105,8 +110,26 @@ def role_of(e):
 
 
 def identify(e):
-    # Use a stable accessible label, not a volatile DOM order or CSS selector.
-    return e.get('label') or e.get('name') or e.get('type') or e.get('ref')
+    # Upload instructions must remain visible to the existing core planner,
+    # which currently sees only role/name/value. Preserve these details in
+    # the semantic name and also export structured metadata for newer clients.
+    label = e.get('label') or e.get('name') or e.get('type') or e.get('ref')
+    if e.get('type') == 'file' and e.get('tag') == 'input':
+        attributes = ['file upload']
+        if e.get('accept'):
+            attributes.append('accepts: ' + str(e['accept'])[:180])
+        if e.get('required'):
+            attributes.append('required')
+        if e.get('multiple'):
+            attributes.append('multiple files')
+        hint = str(e.get('description') or e.get('upload_hint') or '').strip()
+        # Nearby page text is untrusted and potentially personal. It is a
+        # helper hint, NOT a validated portal specification.
+        hint = re.sub(r'\b\d[\d -]{10,}\d\b', '[redacted identifier]', hint)[:160]
+        if hint and hint not in label:
+            attributes.append('page hint: ' + hint)
+        return str(label)[:180] + ' (' + '; '.join(attributes) + ')'
+    return label
 
 
 def human_kind(e):
@@ -159,12 +182,24 @@ def convert(obs, info):
         if used[key]>1: label=f'{label} [{used[key]}]'
         node_lookup[(role,label)] = e['ref']
         reverse[e['ref']]=label
-        output.append({'ref':e['ref'],'role':role,'name':label,'value':e.get('value','') if not e.get('redacted') else '[redacted]'})
+        output.append({'ref':e['ref'],'role':role,'name':label,
+                       'value':e.get('value','') if not e.get('redacted') else '[redacted]',
+                       # Additive metadata: legacy PageNode ignores extras;
+                       # updated core can use them for rigorous upload checks.
+                       'element_type':e.get('type',''),
+                       'accept':e.get('accept','') if role=='fileupload' else '',
+                       'required':bool(e.get('required',False)),
+                       'multiple':bool(e.get('multiple',False)),
+                       'description':e.get('description','') if role=='fileupload' else '',
+                       'upload_hint':e.get('upload_hint','') if role=='fileupload' else ''})
     info.nodes = node_lookup
     info.observation_id = obs['observation_id']
     info.auth_target = next((e['ref'] for e in obs['elements'] if e['risk']=='human_auth' and human_kind(e)),None)
     # Core should NEVER forward the unproven screenshot to WhatsApp.
-    return {'url':obs['url'],'title':obs['title'],'nodes':output,'screenshot_base64':None,
+    return {'url':obs['url'],'title':obs['title'],'nodes':output,
+            'page_text':obs.get('text','')[:3500],
+            'observation_truncated':bool(obs.get('truncated',False)),
+            'screenshot_base64':None,
             'screenshot_masked':False,'challenge':challenge_info(obs,reverse),
             'session_expired': bool(re.search(r'session expired|login again|timed out',obs.get('text',''),re.I)),
             'error': None,'receipt_number':receipt_from_observation(obs,info),
@@ -174,13 +209,29 @@ def convert(obs, info):
 @router.post('/session')
 async def open_session(req:Open,x_internal_key:str|None=Header(None)):
     w=worker();w.require_key(x_internal_key)
+    dynamic = navigation_mode() == NAV_MODE_PUBLIC
     registry=settings()
-    entry=registry.get(req.portal_id)
-    if not isinstance(entry,dict) or not isinstance(entry.get('url'),str):
-        raise HTTPException(422,'Unknown portal ID. Register an operator-reviewed portal URL in BROWSER_PORTALS_JSON')
-    requested=entry['url']
-    allowed={origin(u.strip()) for u in (os.getenv('BROWSER_ALLOWED_ORIGINS') or w.MOCK_URL).split(',') if u.strip()}
-    if origin(requested) not in allowed:
+    entry = None
+    if req.url:
+        if not dynamic:
+            raise HTTPException(403,'Dynamic URLs are disabled; enable public-web mode explicitly')
+        if not req.consent_ref:
+            raise HTTPException(422,'Citizen browsing consent reference is required for a dynamic URL')
+        if req.portal_id and req.portal_id in registry:
+            raise HTTPException(422,'Choose either a registered portal ID or a dynamic URL')
+        requested = req.url
+        await assert_public_url(requested)
+    else:
+        if not req.portal_id:
+            raise HTTPException(422,'Provide a portal_id or a consent-backed URL')
+        entry = registry.get(req.portal_id)
+        if not isinstance(entry,dict) or not isinstance(entry.get('url'),str):
+            raise HTTPException(422,'Unknown portal ID; provide a dynamic URL with consent or configure the portal registry')
+        requested = entry['url']
+        if dynamic:
+            await assert_public_url(requested)
+    allowed={origin(u.strip()) for u in (os.getenv('BROWSER_ALLOWED_ORIGINS') or w.MOCK_URL).split(',') if u.strip()} if not dynamic else set()
+    if not dynamic and origin(requested) not in allowed:
         raise HTTPException(403,'Portal origin is not in BROWSER_ALLOWED_ORIGINS')
     async with w.creation_lock:
         from browser.general_routes import contexts
@@ -188,17 +239,24 @@ async def open_session(req:Open,x_internal_key:str|None=Header(None)):
             raise HTTPException(429,'Browser capacity reached')
         context=await w.app.state.browser.new_context(viewport={'width':1180,'height':760},accept_downloads=False)
         page=await context.new_page()
-        session=GeneralContext(context=context,page=page,allowed=allowed)
+        session=GeneralContext(context=context,page=page,allowed=allowed,public_web=dynamic)
         await context.route('**/*',session.route)
         try:
             await page.goto(requested,wait_until='domcontentloaded',timeout=20000)
             await observe(session)
+        except PWTimeout as exc:
+            await context.close()
+            raise HTTPException(504,'Browser navigation timed out. Run scripts/diagnose_browser_navigation.py inside worker to distinguish network, DNS, blocked requests and DOM readiness') from exc
+        except PWError as exc:
+            await context.close()
+            reason='environment_blocked_by_admin' if 'ERR_BLOCKED_BY_ADMINISTRATOR' in str(exc) else 'network_or_browser_failure'
+            raise HTTPException(502,f'Browser navigation failed: {reason}; check worker navigation diagnostics') from exc
         except Exception:
             await context.close();raise
         contexts[session.id]=session
         sid=secrets.token_urlsafe(24)
-        bridges[sid]=BridgeSession(context_id=session.id,portal_id=req.portal_id,
-                       receipt_pattern=entry.get('receipt_pattern'))
+        bridges[sid]=BridgeSession(context_id=session.id,portal_id=req.portal_id or 'dynamic-public-web',
+                       receipt_pattern=entry.get('receipt_pattern') if entry else None)
         return {'session_id':sid}
 
 
@@ -307,6 +365,8 @@ async def action(sid:str,req:CoreAction,x_internal_key:str|None=Header(None)):
                 return {'ok':True}
             raise HTTPException(403,'Irreversible browser action requires a dedicated human/approval workflow')
         if req.type=='upload':
+            if not e or e.get('type')!='file':
+                raise HTTPException(422,'Upload action requires an observed file input; use the fileupload role')
             import base64
             try:raw=base64.b64decode(req.file_base64 or '',validate=True)
             except Exception:raise HTTPException(422,'Invalid uploaded document encoding')
