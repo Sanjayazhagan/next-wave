@@ -81,6 +81,8 @@ def find_document(img: np.ndarray) -> tuple[np.ndarray, bool]:
 def measure_skew(img: np.ndarray) -> float:
     """Angle in degrees of the text block (positive = counter-clockwise tilt)."""
     gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    if gray.shape[1] > 1200:  # the angle doesn't depend on resolution; measure on a small copy
+        gray = cv2.resize(gray, (1200, int(gray.shape[0] * 1200 / gray.shape[1])), interpolation=cv2.INTER_AREA)
     _, th = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
     coords = np.column_stack(np.where(th > 0))[:, ::-1].astype(np.float32)  # (x, y)
     if len(coords) < 50:
