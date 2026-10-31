@@ -311,6 +311,63 @@ def test_missing_modules_are_skipped_cleanly(
     assert "login ID" in network.last_text()
 
 
+def boom(*args):
+    raise RuntimeError("module crashed")
+
+
+def test_crashing_extraction_does_not_end_the_session(
+    network: Network, make_client, plugins: Plugins
+) -> None:
+    plugins.extraction = boom
+    chat = Chat(make_client(), network)
+    chat.up_to_login()
+    assert "login ID" in network.last_text()
+
+
+def test_extraction_returning_rubbish_does_not_end_the_session(
+    network: Network, make_client, plugins: Plugins
+) -> None:
+    plugins.extraction = lambda images: {"not": "the contract"}
+    chat = Chat(make_client(), network)
+    chat.up_to_login()
+    assert "login ID" in network.last_text()
+
+
+def test_crashing_rule_engine_carries_on_with_the_default_portal(
+    network: Network, make_client, plugins: Plugins
+) -> None:
+    plugins.rules = boom
+    chat = Chat(make_client(), network)
+    chat.up_to_documents()
+    assert "Please send photos" in network.last_text()
+    chat.photo()
+    chat.press("documents:done")
+    assert "login ID" in network.last_text()
+
+
+def test_crashing_doctor_is_skipped(
+    network: Network, make_client, plugins: Plugins
+) -> None:
+    plugins.doctor = boom
+    chat = Chat(make_client(), network)
+    chat.up_to_review()
+    assert "Please check your application" in network.last_text()
+
+
+def test_doctor_as_a_plain_dict_with_extra_fields_works(
+    network: Network, make_client, plugins: Plugins
+) -> None:
+    plugins.doctor = lambda request: {
+        "risk_score": 0.2,
+        "allowed_to_continue": True,
+        "warnings": ["extra field from the other schema"],
+        "mismatches": [{"field": "full_name", "detail": "Spelling differs"}],
+    }
+    chat = Chat(make_client(), network)
+    chat.up_to_review()
+    assert "Spelling differs" in network.last_text()
+
+
 def test_declining_consent_ends_the_session(
     chat: Chat, client: TestClient, network: Network
 ) -> None:

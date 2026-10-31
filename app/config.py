@@ -1,5 +1,6 @@
+import json
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -42,6 +43,10 @@ class Settings(BaseSettings):
     # The browser service in browser-product/, which takes over from the two above.
     browser_product_url: str = ""
     browser_product_key: str = ""
+    # "portal" runs its fixed mock portal. "general" drives real pages step by step.
+    browser_product_mode: Literal["portal", "general"] = "portal"
+    # For "general": JSON mapping each portal_id to its start page.
+    portal_urls: str = "{}"
 
     # Runs a fake portal and fake extraction, so the loop can be tried end to end.
     use_standins: bool = False
@@ -57,3 +62,6 @@ class Settings(BaseSettings):
     max_explore_steps: int = 40
     max_upload_bytes: int = 20_000_000
     cors_origins: str = ""  # Comma separated, for the web app.
+
+    def portal_url_map(self) -> dict[str, str]:
+        return json.loads(self.portal_urls)

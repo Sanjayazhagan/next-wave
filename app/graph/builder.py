@@ -53,6 +53,8 @@ def build_graph(deps: Deps, checkpointer: BaseCheckpointSaver) -> Any:
         return "fix_details" if state.get("fix_error") else "confirm_details"
 
     def after_match(state: AgentState) -> str:
+        if state.get("rules_failed"):
+            return "collect_documents"  # Carries on with the default portal.
         return "finish" if state.get("final") else "choose_scheme"
 
     def after_choice(state: AgentState) -> str:
@@ -105,7 +107,9 @@ def build_graph(deps: Deps, checkpointer: BaseCheckpointSaver) -> Any:
         ["confirm_details", "fix_details", "match_schemes", "collect_documents"],
     )
     graph.add_conditional_edges("fix_details", after_fix, ["fix_details", "confirm_details"])
-    graph.add_conditional_edges("match_schemes", after_match, ["choose_scheme", "finish"])
+    graph.add_conditional_edges(
+        "match_schemes", after_match, ["choose_scheme", "collect_documents", "finish"]
+    )
     graph.add_conditional_edges(
         "choose_scheme", after_choice, ["choose_scheme", "collect_documents"]
     )

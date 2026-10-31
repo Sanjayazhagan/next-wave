@@ -19,3 +19,4 @@ class Mismatch(BaseModel):
 class DoctorResponse(BaseModel):
     mismatches: list[Mismatch]
     risk_score: float = Field(ge=0, le=1)
+    allowed_to_continue: bool = True

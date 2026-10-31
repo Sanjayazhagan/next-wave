@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from langgraph.types import interrupt
+from pydantic import ValidationError
 
 from app.assistant import Assistant, clean_answer
 from app.browser import BrowserError, BrowserSessionLost, BrowserWorker
@@ -20,15 +21,15 @@ from app.graph import messages
 from app.graph.state import AgentState
 from app.llm import LlmError
 from app.planner import Planner, PlanError
-from app.plugins import Plugins, call
+from app.plugins import PluginError, Plugins, call
 from app.redact import mask_for_display, redact
 from app.sessions import SessionStore
 from app.skills import SkillStep, SkillStore
 from app.vault import FileStore, Vault
 from contracts.browser import Action, Snapshot
-from contracts.doctor import DoctorRequest
-from contracts.documents import DocumentImage, ExtractedDocument
-from contracts.eligibility import EligibilityRequest
+from contracts.doctor import DoctorRequest, DoctorResponse
+from contracts.documents import DocumentImage, ExtractedDocument, ExtractionResult
+from contracts.eligibility import EligibilityRequest, EligibilityResponse
 from contracts.profile import Profile, ProfileField
 from contracts.vault import Receipt
 
@@ -128,6 +129,11 @@ class Nodes:
             state["session_id"], "step_started", step=step, message=message, reasoning=reasoning
         )
 
+    def _module_failed(self, state: AgentState, step: str, exc: Exception) -> None:
+        """A teammate's module must never end a user's session."""
+        log.warning("Module for %s failed: %s", step, type(exc).__name__)
+        self._emit(state, step, "Module failed, so this step was skipped", type(exc).__name__)
+
     # --- User loop ---
 
     async def choose_language(self, state: AgentState) -> dict[str, Any]:
@@ -219,7 +225,11 @@ class Nodes:
         for entry in state["file_refs"]:
             data, mime_type = self.d.files.get(entry["file_ref"])
             images.append(DocumentImage(file_ref=entry["file_ref"], mime_type=mime_type, data=data))
-        result = await call(extract, images)
+        try:
+            result = ExtractionResult.model_validate(await call(extract, images))
+        except (PluginError, ValidationError) as exc:
+            self._module_failed(state, "extract_profile", exc)
+            return {"documents": []}
         # What the user told us stays. The doctor flags any clash with the documents.
         profile = profile_of(state)
         for name, field in result.profile.fields.items():
@@ -293,7 +303,13 @@ class Nodes:
     async def match_schemes(self, state: AgentState) -> dict[str, Any]:
         self._emit(state, "match_schemes", "Checking which schemes you qualify for")
         request = EligibilityRequest(profile=profile_of(state))
-        response = await call(self.d.plugins.rules, request)
+        try:
+            response = EligibilityResponse.model_validate(
+                await call(self.d.plugins.rules, request)
+            )
+        except (PluginError, ValidationError) as exc:
+            self._module_failed(state, "match_schemes", exc)
+            return {"schemes": [], "rules_failed": True}
         schemes = sorted(response.schemes, key=lambda scheme: scheme.rank)
         if not schemes:
             return {"schemes": [], "outcome": "no_scheme", "final": {"text": messages.NO_SCHEME}}
@@ -317,7 +333,12 @@ class Nodes:
         request = DoctorRequest(
             profile=profile_of(state), documents=documents, scheme_id=scheme.get("scheme_id")
         )
-        return {"doctor_report": (await call(self.d.plugins.doctor, request)).model_dump()}
+        try:
+            report = DoctorResponse.model_validate(await call(self.d.plugins.doctor, request))
+        except (PluginError, ValidationError) as exc:
+            self._module_failed(state, "doctor", exc)
+            return {"doctor_report": None}
+        return {"doctor_report": report.model_dump()}
 
     # --- Portal run ---
 
@@ -488,7 +509,7 @@ class Nodes:
             }
         elif step.action == "upload":
             try:
-                self._attach_document(state, step, action)
+                await self._attach_document(state, step, action)
             except LookupError as exc:
                 return self._strike(state, str(exc))
         try:
@@ -508,14 +529,21 @@ class Nodes:
             update["filled"] = {**state.get("filled", {}), **filled}
         return update
 
-    def _attach_document(self, state: AgentState, step: SkillStep, action: Action) -> None:
+    async def _attach_document(
+        self, state: AgentState, step: SkillStep, action: Action
+    ) -> None:
         file_ref = self._file_for(state, step.document)
         if file_ref is None:
             raise LookupError(f"No document for {step.document}")
         data, mime_type = self.d.files.get(file_ref)
         compress = self.d.plugins.compressor
         if compress is not None:
-            data = compress(data, mime_type, state["portal_id"], step.document or "")
+            try:
+                data = await call(
+                    compress, data, mime_type, state["portal_id"], step.document or ""
+                )
+            except PluginError as exc:
+                self._module_failed(state, "compressor", exc)  # Try the original.
         action.file_base64 = base64.b64encode(data).decode()
         action.file_mime = mime_type
         action.file_name = f"{step.document or 'document'}.{mime_type.rsplit('/', 1)[-1]}"

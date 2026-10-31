@@ -97,12 +97,12 @@ class Question:
 
 # The work split says 4 quick questions but does not list them.
 QUESTIONS = (
-    Question("state", "State:", "Which state do you live in?", "the Indian state they live in"),
+    Question("state", "State:", "Which state do you live in?", "the Indian state they live in, as its full English name, such as Tamil Nadu or Uttar Pradesh"),
     Question(
         "course",
         "Studying:",
         "What are you studying now? For example: Class 12, or B.E. second year.",
-        "what they are studying now, such as Class 12 or B.E. second year",
+        "what they are studying now, in English, such as Class 12 or B.E. second year",
     ),
     Question(
         "annual_income",

@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import sqlite3
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -20,7 +21,7 @@ from app.llm import (
     parse_json_object,
 )
 from app.planner import Planner, PlanError
-from app.plugins import load_plugins
+from app.plugins import PluginError, call, load_plugins
 from app.redact import mask_for_display, redact
 from app.skills import SkillStep, SkillStore
 from app.vault import FileStore, Vault, decode_master_key
@@ -318,6 +319,54 @@ def test_skill_versions_carry_counts_forward(tmp_path: Path) -> None:
     assert latest.steps == steps
     assert store.latest("other") is None
     store.close()
+
+
+def test_sync_module_runs_in_a_thread_so_chats_keep_moving() -> None:
+    def slow_module() -> str:
+        time.sleep(0.2)
+        return "done"
+
+    async def run() -> list[str]:
+        finished: list[str] = []
+
+        async def other_chat() -> None:
+            finished.append("other chat")
+
+        async def module() -> None:
+            finished.append(await call(slow_module))
+
+        await asyncio.gather(module(), other_chat())
+        return finished
+
+    assert asyncio.run(run()) == ["other chat", "done"]
+
+
+def test_async_and_callable_object_modules_both_work() -> None:
+    async def async_module() -> str:
+        return "async"
+
+    class Module:
+        async def __call__(self) -> str:
+            return "object"
+
+    assert asyncio.run(call(async_module)) == "async"
+    assert asyncio.run(call(Module())) == "object"
+
+
+def test_crashing_module_is_reported_cleanly() -> None:
+    def broken() -> None:
+        raise RuntimeError("boom")
+
+    with pytest.raises(PluginError, match="RuntimeError"):
+        asyncio.run(call(broken))
+
+
+def test_hanging_module_times_out() -> None:
+    async def hangs() -> None:
+        await asyncio.sleep(5)
+
+    with pytest.raises(PluginError, match="TimeoutError"):
+        asyncio.run(call(hangs, timeout=0.05))
 
 
 def test_missing_modules_load_as_none() -> None:

@@ -1,6 +1,7 @@
 # Contracts
 
-Frozen interfaces between the three of us. Change one only on a sync call.
+Frozen interfaces between the three of us, and the one source of truth. Change one
+only on a sync call. To plug in a module, see [docs/INTEGRATION.md](../docs/INTEGRATION.md).
 Each file holds Pydantic models; `Model.model_json_schema()` gives the JSON Schema.
 
 | Interface | File | Between |

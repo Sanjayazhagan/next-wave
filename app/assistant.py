@@ -51,6 +51,8 @@ Never promise that someone qualifies. A later step checks that.
 Reply with only this JSON:
 {"reply": "your message to the user", "fields": {"field_name": "value"}}
 Put a value in "fields" only when the user clearly stated it. Otherwise leave it out.
+Always write field values in English, whatever language you reply in, and write
+abbreviations in full: "UP" is Uttar Pradesh.
 When nothing is left in STILL NEEDED after this message, thank them and say they can
 now send photos of their documents one at a time, then press Done."""
 
