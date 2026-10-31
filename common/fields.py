@@ -17,3 +17,6 @@ COMMUNITY_BUTTONS = {
     "sc_st": {"SC", "SCA", "ST"},
     "general": {"OC", "GEN", "EWS"},
 }
+
+# Asked only when a scheme's rules need them (see modules/rules/questions.py).
+EXTRA_FIELDS = ["disability_percent", "govt_school_6_to_12"]

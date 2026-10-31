@@ -1,0 +1,16 @@
+[
+  {
+    "url": "https://www.myscheme.gov.in/schemes/pmstn",
+    "file": "www_myscheme_gov_in_schemes_pmstn.txt",
+    "scraped_at": "2026-10-31",
+    "sha256": "b737770641a87eaf6f433b68342af8728a35db5f051b86c493c827af8089013e",
+    "chars": 3038
+  },
+  {
+    "url": "https://bcmbcmw.tn.gov.in/welfschemes.htm",
+    "file": "bcmbcmw_tn_gov_in_welfschemes_htm.txt",
+    "scraped_at": "2026-10-31",
+    "sha256": "0f95ee17d5c1d3619902cfb1c09575d04f2bd213bf884db0355359479d952e9f",
+    "chars": 22269
+  }
+]

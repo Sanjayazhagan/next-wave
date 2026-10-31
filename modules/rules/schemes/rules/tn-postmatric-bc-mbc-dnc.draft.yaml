@@ -1,0 +1,39 @@
+# DRAFT, not loaded. Review against raw/tn-postmatric-bc-mbc-dnc/*.txt, add `review:`, rename.
+# Note for the reviewer: myScheme (source 0) describes the school-level scheme
+# (11th/12th, BC income ₹1,00,000). These rules follow the department page
+# (source 1), section "Post-matric scholarship scheme (College students)".
+# BCM (BC Muslim) is not named in the clause; decide whether to add it.
+scheme_id: tn-postmatric-bc-mbc-dnc
+name: Tamil Nadu Post Matric Scholarship for BC, MBC and DNC College Students
+portal_id: tn_scholarship
+benefit_inr: null
+benefit_text: "Under the scheme, tuition fee and special fee are sanctioned as fixed for the Government educational institutions. Examination fee is sanctioned in full and book money as notified in the scholarship notification."
+deadline: null
+required_docs: [community, income]
+sources:
+  - url: https://www.myscheme.gov.in/schemes/pmstn
+    scraped_at: 2026-10-31
+  - url: https://bcmbcmw.tn.gov.in/welfschemes.htm
+    scraped_at: 2026-10-31
+rules:
+  - id: tn-resident
+    field: state
+    op: eq
+    value: Tamil Nadu
+    clause: "The beneficiary should be a resident of Tamil Nadu."
+    source: 0
+  - id: community
+    field: community
+    op: in
+    value: [BC, MBC, DNC]
+    clause: "Under Post matric scholarship scheme, scholarships are sanctioned to Backward Classes, Most Backward Classes and Denotified Communities students studying ITI, Diploma in Polytechnics, Post Graduate, Professional and Ph.D. courses."
+    source: 1
+  - id: income-ceiling
+    field: annual_income
+    op: lte
+    value: 250000
+    clause: "Annual parental income should not exceed Rs.2.5 lakh to avail this scholarship."
+    source: 1
+unmodelled:
+  - clause: "Under Post matric scholarship scheme, scholarships are sanctioned to Backward Classes, Most Backward Classes and Denotified Communities students studying ITI, Diploma in Polytechnics, Post Graduate, Professional and Ph.D. courses."
+    source: 1
