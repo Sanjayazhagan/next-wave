@@ -19,13 +19,13 @@ FIELDS_BY_TYPE: dict[str, list[str]] = {
     "marksheet": ["full_name", "father_name", "institution", "course", "year_of_study",
                   "marks_percent", "marks_total", "marks_max", "exam_year"],
     "income": ["full_name", "father_name", "annual_income", "district", "state",
-               "certificate_number", "issue_date"],
-    "community": ["full_name", "father_name", "community", "district", "state",
-                  "certificate_number", "issue_date"],
+               "certificate_number", "issue_date", "valid_until"],
+    "community": ["full_name", "father_name", "caste", "community", "district", "state",
+                  "certificate_number", "issue_date", "valid_until"],
 }
 
-# Helper fields used to compute a profile field, never stored themselves.
-HELPER_FIELDS = {"marks_total", "marks_max"}
+# Helper fields: read so the model keeps them apart from real fields, never stored themselves.
+HELPER_FIELDS = {"marks_total", "marks_max", "caste"}
 
 
 def schema_for(doc_type: str) -> type[BaseModel]:

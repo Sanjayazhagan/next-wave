@@ -26,6 +26,27 @@ def _finding(check: str, kind: str, field: str | None, severity: Severity, detai
                    fix=fix, values_by_doc=values or {})
 
 
+def parent_held(docs: list[ExtractedDocument]) -> set[int]:
+    """Indexes of income certificates issued in a parent's name (common: the family income is the parent's).
+
+    Detected when the certificate's holder matches the father's name on another document.
+    """
+    fathers = [d.fields["father_name"].value for d in docs if d.document_type != "income" and "father_name" in d.fields]
+    out = set()
+    for i, d in enumerate(docs):
+        holder = d.fields.get("full_name")
+        if d.document_type == "income" and holder and any(
+                names.compare(holder.value, f)[0] >= names.MINOR for f in fathers):
+            out.add(i)
+    return out
+
+
+def _student_docs(docs: list[ExtractedDocument]) -> list[ExtractedDocument]:
+    """Documents about the student themself (parent-held income certificates left out)."""
+    skip = parent_held(docs)
+    return [d for i, d in enumerate(docs) if i not in skip]
+
+
 def _values(docs: list[ExtractedDocument], field: str) -> dict[str, str]:
     """Document type -> value. Never includes Aadhaar or bank fields (they aren't compared)."""
     return {d.document_type: d.fields[field].value for d in docs if field in d.fields and d.fields[field].value}
@@ -33,6 +54,7 @@ def _values(docs: list[ExtractedDocument], field: str) -> dict[str, str]:
 
 def name_consistency(docs: list[ExtractedDocument]) -> list[Finding]:
     out = []
+    docs = _student_docs(docs)
     father = next(iter(_values(docs, "father_name").values()), None)
     for field in NAME_FIELDS:
         vals = _values(docs, field)
@@ -60,8 +82,10 @@ def _same(field: str, a: str, b: str, father: str | None) -> bool:
 
 def field_consistency(docs: list[ExtractedDocument]) -> list[Finding]:
     out = []
+    student = _student_docs(docs)
     for field in CROSS_FIELDS:
-        vals = _values(docs, field)
+        # A parent-held income certificate still counts for income, not for names or dates of birth.
+        vals = _values(docs if field == "annual_income" else student, field)
         if len(vals) < 2:
             continue
         items = list(vals.items())
@@ -90,7 +114,11 @@ def eligibility_recheck(profile: Profile, scheme) -> list[Finding]:
         return [_finding("eligibility_recheck", "eligibility", r.field, "blocker", explain(m),
                          msg.not_eligible(m.name, reason))]
     if m.status == "needs_info":
-        fields = sorted({r.field.replace("_", " ") for r in m.results if r.status == "unknown"})
+        unknown = [r for r in m.results if r.status == "unknown"]
+        if any(r.field == "community" and r.actual == "OBC" for r in unknown):
+            return [_finding("eligibility_recheck", "eligibility", "community", "medium", explain(m),
+                             msg.state_community(m.name))]
+        fields = sorted({r.field.replace("_", " ") for r in unknown})
         return [_finding("eligibility_recheck", "eligibility", None, "medium", explain(m), msg.needs_info(m.name, fields))]
     return []
 
@@ -144,6 +172,11 @@ def date_validity(docs: list[ExtractedDocument], today: date | None = None) -> l
     for d in docs:
         if d.document_type not in ("income", "community"):
             continue
+        until = d.fields.get("valid_until")
+        expiry = norm_date(until.value) if until else None
+        if expiry and expiry < today:
+            out.append(_finding("date_validity", "validity", "valid_until", "high", f"expired on {expiry.isoformat()}",
+                                msg.expired(d.document_type, expiry)))
         raw = d.fields.get("issue_date")
         issued = norm_date(raw.value) if raw else None
         if issued is None:

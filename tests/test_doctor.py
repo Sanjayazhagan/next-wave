@@ -100,3 +100,34 @@ def test_plugin_contract_and_no_sensitive_numbers():
     resp = check_application(DoctorRequest(profile=prof(), documents=docs, scheme_id="unknown-scheme"))
     assert isinstance(resp, DoctorResponse) and 0 <= resp.risk_score <= 1
     assert resp.mismatches[0].field == "full_name" and "9012" not in resp.model_dump_json()
+
+
+def test_income_certificate_in_parents_name_is_not_a_mismatch():
+    docs = [doc("marksheet", full_name="SATYAJIT S"),
+            doc("community", full_name="Satyajit", father_name="Solai Rajan"),
+            doc("income", full_name="Solairajan P", father_name="Patchaimal", annual_income=144000)]
+    # Only the student's own documents are compared: "SATYAJIT S" vs "Satyajit" is a gentle check,
+    # and the father's name on the parent's income certificate (the grandfather) is not compared.
+    assert [(f.severity, f.values_by_doc) for f in checks.name_consistency(docs)] == [
+        ("medium", {"marksheet": "SATYAJIT S", "community": "Satyajit"})]
+    assert checks.field_consistency(docs) == []
+    assert checks.parent_held(docs) == {2}
+
+
+def test_expired_certificate_is_high():
+    f = checks.date_validity([doc("income", issue_date="2024-02-27", valid_until="2025-02-26")], today=date(2026, 10, 31))
+    assert [(x.severity, x.detail) for x in f] == [("high", "expired on 2025-02-26")]
+    assert "TN e-District" in f[0].fix
+
+
+def test_names_spaced_differently_match():
+    from modules.doctor.names import compare
+    assert compare("Solairajan P", "Solai Rajan")[0] >= 95
+    assert compare("Satyajit", "Ramesh")[0] < 85
+
+
+def test_central_obc_asks_for_state_certificate(tmp_path):
+    from tests.rules_helpers import COMMUNITY
+    p = Profile(fields={"community": ProfileField(value="OBC", source_document="community", confidence=1.0)})
+    f = checks.eligibility_recheck(p, scheme(tmp_path, [COMMUNITY]))
+    assert f[0].severity == "medium" and "Tamil Nadu community certificate" in f[0].fix

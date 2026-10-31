@@ -35,3 +35,14 @@ from common.textnorm import norm_category  # noqa: E402
 ])
 def test_norm_category(raw, expected):
     assert norm_category(raw) == expected
+
+
+from common.textnorm import strip_honorifics  # noqa: E402
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("Thiru Solairajan P", "Solairajan P"), ("Selvi. K. Priya", "K. Priya"), ("Shri Satyajit", "Satyajit"),
+    ("Satyajit S", "Satyajit S"), ("Thiru", "Thiru"),
+])
+def test_strip_honorifics(raw, expected):
+    assert strip_honorifics(raw) == expected

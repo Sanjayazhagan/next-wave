@@ -16,7 +16,7 @@ from PIL import Image
 
 from common.config import env
 from common.llm import vision_json
-from common.textnorm import norm_amount, norm_category, norm_date
+from common.textnorm import norm_amount, norm_category, norm_date, strip_honorifics
 
 from . import confidence, ocr, preprocess
 from .classify import classify, jpeg_bytes
@@ -43,8 +43,10 @@ def typed(field: str, raw: str | None) -> object:
     if raw is None or not str(raw).strip():
         return None
     raw = str(raw).strip()
-    if field in ("date_of_birth", "issue_date"):
+    if field in ("date_of_birth", "issue_date", "valid_until"):
         return norm_date(raw)
+    if field in ("full_name", "father_name", "mother_name"):
+        return strip_honorifics(raw)
     if field == "annual_income":
         return norm_amount(raw)
     if field in ("marks_percent", "marks_total", "marks_max"):

@@ -34,6 +34,9 @@ def check(field: str, value: object, today: date | None = None) -> bool:
         return n is not None and 0 <= n <= 100_000_000
     if field == "community":
         return norm_category(str(value)) is not None
+    if field == "valid_until":
+        d = norm_date(value) if not isinstance(value, date) else value
+        return d is not None and d.year > 2000
     if field == "issue_date":
         d = norm_date(value) if not isinstance(value, date) else value
         return d is not None and date(2000, 1, 1) < d <= today

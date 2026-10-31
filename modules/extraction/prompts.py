@@ -4,7 +4,8 @@ SYSTEM = (
     "You read Indian government and academic documents, often bilingual Tamil and English. "
     "Return only values printed on the document. If a field is not printed, return null. "
     "Never infer or guess. Copy names exactly as printed, including initials. Dates as YYYY-MM-DD. "
-    "Income as an integer number of rupees per year. For each field also return `evidence`: "
+    "Income as an integer number of rupees per year. `valid_until` is the end date of the printed "
+    "'Certificate validity period' (null if none is printed). For each field also return `evidence`: "
     "the exact printed text you read it from."
 )
 
@@ -23,9 +24,11 @@ LAYOUT_HINTS = {
     ),
     "community": (
         "Tamil Nadu community certificates: the certificate number and date are at the top; the body names "
-        "the person, their father, the village/taluk/district, and the community (caste) and the category "
-        "it belongs to, such as Backward Class or Most Backward Class or Scheduled Caste. Return the category "
-        "as printed (e.g. 'Most Backward Class')."
+        "the person, their father, the village/taluk/district, the caste (e.g. 'Nadar', 'Vanniyar') and the "
+        "category it belongs to. Put the caste in `caste` and the category in `community`, never the caste. "
+        "The category is a class such as Backward Class, Most Backward Class, Denotified Community, "
+        "Scheduled Caste or Scheduled Tribe; for an 'Other Backward Class' (OBC) certificate issued under the "
+        "Government of India, the category is 'Other Backward Class'."
     ),
 }
 

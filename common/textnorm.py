@@ -119,3 +119,15 @@ def norm_category(s: str | None) -> str | None:
         if alias in t:
             return _CATEGORY_ALIASES[alias]
     return None
+
+
+HONORIFICS = {"mr", "ms", "mrs", "miss", "selvan", "selvi", "thiru", "thirumathi", "tmt", "kumari", "kum",
+              "dr", "smt", "sri", "shri", "selvan.", "master"}
+
+
+def strip_honorifics(name: str) -> str:
+    """'Thiru Solairajan P' -> 'Solairajan P'; 'Selvi. K. Priya' -> 'K. Priya'. Only leading titles go."""
+    tokens = name.split()
+    while tokens and tokens[0].rstrip(".").casefold() in HONORIFICS:
+        tokens = tokens[1:]
+    return " ".join(tokens) if tokens else name

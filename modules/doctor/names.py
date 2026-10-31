@@ -3,9 +3,8 @@ from __future__ import annotations
 
 from rapidfuzz import fuzz
 
-from common.textnorm import norm_text
+from common.textnorm import HONORIFICS, norm_text
 
-HONORIFICS = {"mr", "ms", "mrs", "miss", "selvan", "selvi", "thiru", "thirumathi", "tmt", "kumari", "kum", "dr", "smt", "sri", "shri"}
 CONSISTENT = 95
 MINOR = 85
 
@@ -42,5 +41,9 @@ def compare(a: str, b: str, father: str | None = None) -> tuple[int, str]:
         return 100, "same name"
     if _initials_match(ta, tb, canon(father or "")):
         return 92, "initials expanded"
-    score = int(fuzz.token_set_ratio(" ".join(t for t in ta if len(t) > 1), " ".join(t for t in tb if len(t) > 1)))
+    fa, fb = [t for t in ta if len(t) > 1], [t for t in tb if len(t) > 1]
+    # Tamil names are often written split or joined ("Solai Rajan" / "Solairajan"): compare both ways.
+    score = int(max(fuzz.token_set_ratio(" ".join(fa), " ".join(fb)), fuzz.ratio("".join(fa), "".join(fb))))
+    if score == 100 and fa and fb:
+        return 95, "same name, spaced differently"
     return score, "minor spelling difference" if score >= MINOR else "different names"

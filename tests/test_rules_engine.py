@@ -134,3 +134,9 @@ def test_committed_rules_load_and_plugin_is_on():
     assert {s.scheme_id for s in rules.SCHEMES} == {
         "aicte-pragati-degree", "aicte-saksham-degree", "pudhumai-penn", "tn-postmatric-bc-mbc-dnc"}
     assert load_plugins().rules is rules.rank_schemes
+
+
+def test_central_obc_certificate_is_unknown_for_state_categories(tmp_path):
+    s = scheme(tmp_path, [COMMUNITY])
+    assert match(s, profile(community="OBC")).status == "needs_info"
+    assert match(s, profile(community="OC")).status == "not_eligible"

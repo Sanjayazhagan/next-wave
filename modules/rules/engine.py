@@ -10,6 +10,7 @@ from contracts.profile import Profile
 from .models import Clause, Rule, RuleResult, Scheme, SchemeMatch
 
 NUMERIC_OPS = {"lt", "lte", "gt", "gte", "between"}
+STATE_BACKWARD = {"BC", "BCM", "MBC", "DNC"}
 _GENDER = {"female": {"female", "f", "girl", "woman", "pen", "பெண்"}, "male": {"male", "m", "boy", "man", "aan", "ஆண்"},
            "transgender": {"transgender", "third gender", "other"}}
 _STATES = {"tn": "tamil nadu", "tamilnadu": "tamil nadu", "tamil nadu": "tamil nadu", "தமிழ்நாடு": "tamil nadu",
@@ -109,6 +110,11 @@ def evaluate(scheme: Scheme, rule: Rule, profile: Profile) -> RuleResult:
     candidates = _candidates(rule.field, raw)
     if not candidates:
         return result("unknown")
+    if rule.field == "community" and candidates == {"OBC"} and rule.op in ("in", "eq"):
+        listed = {_norm_expected("community", v) for v in (rule.value if rule.op == "in" else [rule.value])}
+        if "OBC" not in listed and listed & STATE_BACKWARD:
+            # A central OBC certificate doesn't say which state category (BC, MBC, DNC) applies.
+            return result("unknown")
     outcomes = {_test_one(rule, c) for c in candidates}
     # A grouped answer (e.g. "BC / MBC") passes only if every member passes.
     return result("pass" if outcomes == {True} else "fail" if outcomes == {False} else "unknown")

@@ -22,7 +22,8 @@ full breakdown is in `diagnose(...) -> Diagnosis` (`findings`, `points`,
 | 4 | `file_spec` | prepared file type, size and legibility against the portal spec | medium each |
 | 5 | `field_consistency` | date of birth, father's name, community, income across documents (the income certificate wins for income, the community certificate for community) | high 30 |
 | 6 | `image_quality` | blurry or dark photo | medium 15 |
-| 7 | `date_validity` | certificate issue date missing or in the future | low 5 |
+| 7 | `date_validity` | certificate expired (printed validity period has ended) | high 30 |
+|   |  | issue date missing or in the future | low 5 |
 
 Checks 2 and 3 run only when the chosen scheme has reviewed rules. Checks 4 and
 6 need the prepared files and photo quality, which `DoctorRequest` doesn't carry
@@ -38,6 +39,10 @@ yet; `diagnose()` accepts them when core can pass them.
 - honorifics (Selvi, Thiru, Tmt, Kumari, ...) are ignored;
 - otherwise `rapidfuzz.token_set_ratio`. 95 and above is consistent, 85 to 94 a
   minor spelling difference, below 85 different names.
+
+An income certificate issued in a parent's name (its holder matches the father's
+name on another document) is normal: it still counts for income, but it is left out
+of the name and father's-name comparisons.
 
 Fix messages (`messages.py`) are English; core translates them. They never
 include Aadhaar or bank numbers: those fields are never compared.

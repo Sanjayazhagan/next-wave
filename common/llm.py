@@ -22,6 +22,9 @@ from .config import env
 
 T = TypeVar("T", bound=BaseModel)
 TIMEOUT_SECONDS = 60
+RETRY_STATUSES = {429, 500, 502, 503}
+RATE_LIMIT_ATTEMPTS = 4
+MAX_RATE_LIMIT_WAIT = 20.0
 
 _lock = threading.Lock()
 _calls = 0
@@ -29,6 +32,10 @@ _calls = 0
 
 class LLMError(RuntimeError):
     pass
+
+
+class LLMHTTPError(LLMError):
+    """The endpoint refused the request (after rate-limit retries); not worth re-prompting."""
 
 
 def llm_calls_total() -> int:
@@ -71,16 +78,30 @@ def _schema_instruction(schema: type[BaseModel]) -> str:
             + json.dumps(schema.model_json_schema(), separators=(",", ":")))
 
 
+def _wait_s(resp: httpx.Response, attempt: int) -> float:
+    """Free tiers limit requests and tokens per minute; honour Retry-After when given."""
+    try:
+        wait = float(resp.headers.get("retry-after", ""))
+    except ValueError:
+        wait = 2.0 * 2 ** attempt
+    return min(wait, MAX_RATE_LIMIT_WAIT)
+
+
 def _post(model: str, messages: list[dict]) -> tuple[str, dict]:
     url = f"{_env('LLM_BASE_URL').rstrip('/')}/chat/completions"
-    resp = httpx.post(
-        url,
-        headers={"Authorization": f"Bearer {env('LLM_API_KEY', 'unused')}"},
-        json={"model": model, "temperature": 0, "messages": messages,
-              "response_format": {"type": "json_object"}},
-        timeout=TIMEOUT_SECONDS,
-    )
-    resp.raise_for_status()
+    for attempt in range(RATE_LIMIT_ATTEMPTS):
+        resp = httpx.post(
+            url,
+            headers={"Authorization": f"Bearer {env('LLM_API_KEY', 'unused')}"},
+            json={"model": model, "temperature": 0, "messages": messages,
+                  "response_format": {"type": "json_object"}},
+            timeout=TIMEOUT_SECONDS,
+        )
+        if resp.status_code not in RETRY_STATUSES or attempt == RATE_LIMIT_ATTEMPTS - 1:
+            break
+        time.sleep(_wait_s(resp, attempt))
+    if resp.status_code >= 400:
+        raise LLMHTTPError(f"HTTP {resp.status_code} from the LLM endpoint")
     body = resp.json()
     try:
         content = body["choices"][0]["message"]["content"] or ""
@@ -102,6 +123,8 @@ def _complete(model: str, messages: list[dict], schema: type[T], caller: str) ->
             parsed = schema.model_validate_json(_json_object(content))
             ok = True
             return parsed
+        except LLMHTTPError as e:
+            raise LLMError(f"{caller}: {e}") from e
         except (ValidationError, LLMError) as e:
             last_err = e
             # The error text names fields, not document content.

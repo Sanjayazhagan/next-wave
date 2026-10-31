@@ -51,3 +51,23 @@ def test_missing_model_env_raises(env, monkeypatch):
     monkeypatch.delenv("LLM_MODEL")
     with pytest.raises(llm.LLMError, match="LLM_MODEL"):
         llm.text_json("hi", Answer, caller="t")
+
+
+def test_rate_limit_is_retried_then_http_errors_are_not_reprompted(env, monkeypatch):
+    replies = iter([httpx.Response(429, headers={"retry-after": "1"}, request=httpx.Request("POST", "http://x")),
+                    _reply('{"doc_type": "income"}')])
+    waits = []
+    monkeypatch.setattr(llm.time, "sleep", waits.append)
+    monkeypatch.setattr(llm.httpx, "post", lambda url, headers, json, timeout: next(replies))
+    assert llm.text_json("hi", Answer, caller="t").doc_type == "income" and waits == [1.0]
+
+    calls = []
+
+    def always_400(url, headers, json, timeout):
+        calls.append(1)
+        return httpx.Response(400, request=httpx.Request("POST", "http://x"))
+
+    monkeypatch.setattr(llm.httpx, "post", always_400)
+    with pytest.raises(llm.LLMError, match="HTTP 400"):
+        llm.text_json("hi", Answer, caller="t")
+    assert len(calls) == 1

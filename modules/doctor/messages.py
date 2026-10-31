@@ -31,6 +31,11 @@ def needs_info(name: str, fields: list[str]) -> str:
     return f"Your documents don't confirm {', '.join(fields)} for {name}. Upload a document that shows it, or confirm it."
 
 
+def state_community(name: str) -> str:
+    return (f"Your community certificate is a central OBC certificate, but {name} needs a Tamil Nadu community "
+            f"certificate showing BC, MBC or DNC. Upload your state community certificate.")
+
+
 def missing_doc(d: str, name: str) -> str:
     return f"{name} needs your {doc(d)}. Please upload a clear photo of it."
 
@@ -41,6 +46,11 @@ def file_spec(d: str, problem: str) -> str:
 
 def quality(d: str, problem: str) -> str:
     return f"The photo of your {doc(d)} is {problem}. Retake it in good light, flat and in focus."
+
+
+def expired(d: str, until) -> str:
+    return (f"Your {doc(d)} expired on {until.strftime('%d %b %Y')}. Portals reject expired certificates: "
+            f"get a fresh one from TN e-District (an e-Sevai centre) and upload it.")
 
 
 def validity(d: str, problem: str) -> str:
