@@ -105,8 +105,10 @@ def typed(reply: dict[str, Any]) -> str:
 
 
 def field_label(field: str) -> str:
-    """The doctor reports code names; the user sees plain words."""
-    return messages.FIELD_LABELS.get(field, field.replace("_", " ").capitalize())
+    """Older doctors report code names; a readable heading, already in the chat's language, stays."""
+    if field in messages.FIELD_LABELS:
+        return messages.FIELD_LABELS[field]
+    return field.replace("_", " ").capitalize() if "_" in field else field
 
 
 def page_values(snapshot: Snapshot) -> list[str]:
