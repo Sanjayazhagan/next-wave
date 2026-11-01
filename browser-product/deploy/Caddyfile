@@ -32,6 +32,13 @@
         reverse_proxy api:8000
     }
 
+    # Fictional stateless practice form only. Never broaden to /practice/*:
+    # other application routes must retain authentication.
+    @scholarship path /practice/scholarship /practice/scholarship/*
+    handle @scholarship {
+        reverse_proxy api:8000
+    }
+
     # Human UI and all remaining routes retain a second layer of basic auth.
     # Signed application identity is additionally required in integrated mode.
     handle {
