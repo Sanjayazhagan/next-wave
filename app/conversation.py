@@ -94,7 +94,9 @@ async def _voice_reply(
         log.warning("Voice note failed: %s", type(exc).__name__)
         await ctx.channel.notify(session, VOICE_FAILED_TEXT)
         return None
-    ctx.sessions.set_language(session.id, heard.language)
+    # Mixed speech is often detected as English, so only the first choice sets the language.
+    if session.pending_kind == "language":
+        ctx.sessions.set_language(session.id, heard.language)
     if session.pending_kind in NO_TRANSLATE_KINDS:
         return {"text": heard.text}
     return {"text": await ctx.language.translate(heard.text, heard.language, ENGLISH)}
