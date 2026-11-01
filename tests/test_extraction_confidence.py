@@ -72,3 +72,13 @@ def test_snap_fixes_a_place_name():
     from modules.extraction.confidence import snap_to_print
     lines = [_words_line(("District", 95), (":", 90), ("Chengalpattu", 92))]
     assert snap_to_print("Chengalpatu", lines) == "Chengalpattu"
+
+
+def test_a_parents_income_certificate_gives_income_not_names():
+    docs = [_doc("community", full_name=("Satyajit", 1.0), father_name=("Solai Rajan", 1.0)),
+            _doc("income", full_name=("Solairajan P", 1.0), father_name=("Patchaimal", 1.0),
+                 annual_income=("144000", 0.98), district=("Chengalpattu", 1.0))]
+    p = merge_profile(docs)
+    assert p.fields["father_name"].value == "Solai Rajan"     # not the grandfather
+    assert p.fields["full_name"].value == "Satyajit"
+    assert p.fields["annual_income"].value == "144000" and p.fields["annual_income"].source_document == "income"

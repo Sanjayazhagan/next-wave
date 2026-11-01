@@ -54,7 +54,8 @@ def test_extract_returns_contract_types(tmp_path, monkeypatch):
     assert result.profile.fields["annual_income"].value == "250000"
     assert doc.fields["issue_date"].value == "2025-06-01"          # certificate details stay on the document
     assert "issue_date" not in result.profile.fields
-    assert result.profile.fields["full_name"].confidence >= 0.95
+    assert doc.fields["full_name"].confidence >= 0.95
+    assert "full_name" not in result.profile.fields       # an income certificate may be a parent's
     assert doc.fields["aadhaar_last4"].value == "9012"
     assert "1234 5678 9012" not in result.model_dump_json()
     assert prompts == ["extraction.extract"]   # one model call per document
@@ -73,7 +74,7 @@ def test_profile_only_holds_core_field_names(tmp_path, monkeypatch):
     from datetime import date
 
     q = Quality(blur_score=100, brightness=150, skew_deg=0, too_blurry=False, too_dark=False)
-    doc = DocResult(doc_id="d", doc_type="income", quality=q, fields={
+    doc = DocResult(doc_id="d", doc_type="marksheet", quality=q, fields={
         "full_name": FieldRead(value="Satyajit", confidence=1), "date_of_birth": FieldRead(value=date(2006, 7, 23), confidence=1),
         "certificate_number": FieldRead(value="TN-1", confidence=1), "qr_status": FieldRead(value="decoded", confidence=1)})
     from modules.extraction.merge import merge_profile
