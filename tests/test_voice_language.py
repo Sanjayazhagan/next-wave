@@ -25,10 +25,6 @@ def run(pending_kind: str, detected: str) -> MagicMock:
     return sessions
 
 
-@pytest.mark.parametrize("kind", ["question", "confirm", "chat"])
-def test_a_short_answer_heard_as_english_keeps_the_chosen_language(kind: str) -> None:
+@pytest.mark.parametrize("kind", ["language", "question", "confirm", "chat"])
+def test_a_voice_note_never_changes_the_selected_language(kind: str) -> None:
     run(kind, "en").set_language.assert_not_called()
-
-
-def test_a_voice_note_can_still_choose_the_language() -> None:
-    run("language", "ta").set_language.assert_called_once_with("s1", "ta")
