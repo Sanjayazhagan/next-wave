@@ -26,7 +26,8 @@
             "scroll",
             "wait",
             "switch_tab",
-            "extract"
+            "extract",
+            "blur"
           ],
           "title": "Kind",
           "type": "string"

@@ -33,6 +33,7 @@ class CoreBrowserClient:
         if not 0<=max_replans<=3:raise ValueError('max_replans must be between 0 and 3')
         for attempt in range(max_replans+1):
             snapshot=await self.snapshot(sid)
+            if snapshot.get('consent_required'):return {'paused':True,'reason':'citizen_consent_choice_required','human_signals':snapshot.get('human_signals',[])}
             if snapshot.get('session_expired'):return {'paused':True,'reason':'session_expired','requires_reauthentication':True}
             if snapshot.get('needs_reconciliation'):return {'paused':True,'reason':'action_outcome_unknown'}
             if snapshot.get('page_status','ready')!='ready':

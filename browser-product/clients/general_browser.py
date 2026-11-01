@@ -1,4 +1,4 @@
-"""Core's provider-neutral observe ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ decide externally ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ validate ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ act client."""
+"""Core's provider-neutral observe ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ decide externally ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ validate ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ act client."""
 import httpx
 from clients.reliability import request_with_backoff,not_applied
 from browser.protocol import BrowserAction,ContextStart,ModelDecision,ModelPort,validate_decision
@@ -41,6 +41,7 @@ class GeneralBrowserClient:
         for attempt in range(max_replans+1):
             payload=await self.model_input(ident,goal)
             obs=payload['observation']
+            if obs.get('consent_required'):return {'paused':True,'reason':'citizen_consent_choice_required'}
             if obs.get('needs_reconciliation'):return {'paused':True,'reason':'action_outcome_unknown'}
             if obs.get('page_status','ready')!='ready':
                 return {'paused':True,'reason':obs['page_status']}

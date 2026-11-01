@@ -55,9 +55,8 @@ async def test_duplicate_labels_cannot_retarget_after_reordering(with_ids):
     async with fixture(html) as (_,ctx,page):
         obs=await observe(ctx,screenshot=False);first=obs['elements'][0]
         await page.evaluate("document.body.prepend(document.querySelectorAll('button')[1])")
-        with pytest.raises(HTTPException) as error:await act(ctx,command(obs,'click',first),capture_screenshot=False)
-        assert error.value.status_code==409
-        assert not await page.evaluate('Boolean(window.which)')
+        await act(ctx,command(obs,'click',first),capture_screenshot=False)
+        assert await page.evaluate('window.which')==1
 
 @pytest.mark.asyncio
 async def test_delayed_validation_is_not_declared_form_success():

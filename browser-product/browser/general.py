@@ -237,11 +237,12 @@ async def census(session):
                 data['form_state_digest']=hmac.new(FORM_HASH_KEY,json.dumps(hidden,sort_keys=True).encode(),hashlib.sha256).hexdigest()
                 data['label']=data['label'].strip()[:300];data['name']=data['name'][:100]
                 data['upload_hint']=data.get('upload_hint','').strip()[:320]
+                data['destination_state_digest']=hmac.new(FORM_HASH_KEY,json.dumps([data['href'],data['form_action']]).encode(),hashlib.sha256).hexdigest()
                 if data['form_action']:data['form_action']=safe_url(data['form_action'])
                 description=' '.join((data['label'],data['name'],data['type'],data['autocomplete']))
                 sensitive=bool(AUTH.search(description));private=bool(IDENTIFIER.search(description))
                 data.update(category='ordinary',risk='ordinary',redacted=sensitive or private)
-                ref=f'{frame_id}-element-{index}'
+                ref=f"{frame_id}-node-{data['node_identity']}"
                 data.update(ref=ref,frame_id=frame_id,frame_url=safe_url(frame.url))
                 # Child frames need Playwright's viewport coordinate conversion.
                 try:box=item['box'] if frame==session.page.main_frame else await asyncio.wait_for(loc.bounding_box(),2)
@@ -297,7 +298,7 @@ def retain_private_value(session,value):
 
 
 def target_signature(element):
-    return {k:v for k,v in element.items() if k not in ('bounds','in_viewport','validation_message','description','upload_hint')}
+    return {k:v for k,v in element.items() if k not in ('bounds','in_viewport','validation_message','description','upload_hint','occluded','blocker','requires_scroll')}
 
 
 async def signature(session):
@@ -368,8 +369,10 @@ async def observe(session,screenshot=True):
         if isinstance(value,dict):return {k:(v if k in ('ref','frame_id','context_id','observation_id','generation','tab_id','id','category','risk','type','tag','role','form_method','content_trust') else redact(v)) for k,v in value.items()}
         return value
     try:
-        overlays=await asyncio.wait_for(session.page.locator('dialog[open],[role=dialog],[role=alertdialog]').evaluate_all("nodes=>nodes.filter(e=>e.getBoundingClientRect().width>0&&getComputedStyle(e).visibility!=='hidden').slice(0,10).map(e=>({id:e.id||e.getAttribute('aria-label')||e.tagName.toLowerCase(),label:(e.getAttribute('aria-label')||e.querySelector('h1,h2,h3')?.textContent||'').slice(0,200),modal:e.matches(':modal')||e.getAttribute('aria-modal')==='true'}))"),2)
+        overlays=await asyncio.wait_for(session.page.locator('dialog[open],[role=dialog],[role=alertdialog],[role=listbox],[role=menu],iframe[title*=consent i],iframe[title*=privacy i]').evaluate_all("nodes=>nodes.filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&getComputedStyle(e).visibility!=='hidden'&&(e.tagName!=='IFRAME'||r.width>=200&&r.height>=100&&r.bottom>0&&r.right>0&&r.top<innerHeight&&r.left<innerWidth)}).slice(0,10).map(e=>({id:e.id||e.getAttribute('aria-label')||e.tagName.toLowerCase(),label:(e.getAttribute('aria-label')||e.getAttribute('title')||e.querySelector('h1,h2,h3')?.textContent||'').slice(0,200),role:e.getAttribute('role')||e.tagName.toLowerCase(),requires_human:/cookie|consent|privacy|captcha|verification|sign in|log in/i.test((e.getAttribute('aria-label')||e.getAttribute('title')||'')+' '+(e.innerText||'').slice(0,2000)),modal:e.matches(':modal')||e.getAttribute('aria-modal')==='true'}))"),2)
     except (BrowserError,asyncio.TimeoutError):overlays=[]
+    consent_pending=any(o.get('requires_human') and re.search(r'consent|privacy|cookie',o.get('label',''),re.I) for o in overlays)
+    session.consent_required=consent_pending
     tabs=[]
     for page in session.context.pages[:20]:
         if not page.is_closed():tabs.append({'id':session.tab_id(page),'url':safe_url(page.url),'active':page==session.page,'allowed':session.permitted(page.url)})
@@ -378,8 +381,20 @@ async def observe(session,screenshot=True):
         if re.search(r'captcha|turnstile|face.?auth',f['url'],re.I):human_signals.append({'kind':'challenge_frame','frame_id':f['id']})
     blocked=verification_page(visible_text,session.last_title)
     page_status='inspection_incomplete' if session.inspection_incomplete else ('blocked' if blocked else ('http_error' if (session.last_navigation_status or 200)>=400 else ('loading_or_empty' if not elements and not visible_text.strip() else 'ready')))
+    if consent_pending:human_signals.append({'kind':'consent_required','action':'citizen_choice_required','automatic_choice':False})
     if blocked:human_signals.append({'kind':'site_verification_interstitial','action':'human_review_required'})
-    return {'downloads_started_total':session.download_events,'interaction_state':{'overlays':redact(overlays),'guidance':'Inspect open overlays before background controls; do not infer consent or dismiss security challenges.'},'version':'2','page_status':page_status,'http_status':session.last_navigation_status,'coverage':{'link_offset':session.link_offset,'link_query':session.link_query,'visible_link_limit':160,'max_elements':250},'context_id':session.id,'generation':session.generation,'observation_id':session.observation_id,'url':safe_url(session.page.url),'title':session.last_title,'observed_at':session.observed_at,'viewport':session.page.viewport_size,'elements':redact(elements),'frames':redact(frames),'tabs':redact(tabs),'structure':redact(structure),'text':redact(visible_text),'accessibility':redact(accessibility),'dialogs':session.dialogs[-10:],'screenshot_base64':base64.b64encode(screenshot_bytes).decode(),'screenshot_mime':'image/jpeg','preview_available':bool(screenshot_bytes),'truncated':truncated,'waiting_human':bool(human_signals),'human_signals':human_signals,'content_trust':'untrusted_website_data','policy':{'generic_submit':False,'origins':sorted(session.allowed) if not session.public_web else ['public-https-only'], 'navigation_mode':'public-web' if session.public_web else 'allowlist','network_methods':['GET','HEAD','OPTIONS']+(['POST'] if intermediate_post_permitted(session.page.url,public_web=session.public_web) else [])},'warnings':['No model is connected by this endpoint. Core must interpret these observations.']+([screenshot_error] if screenshot_error else [])}
+    return {'consent_required':consent_pending,'downloads_started_total':session.download_events,'interaction_state':{'overlays':redact(overlays),'guidance':'Inspect open overlays before background controls; do not infer consent or dismiss security challenges.'},'version':'2','page_status':page_status,'http_status':session.last_navigation_status,'coverage':{'link_offset':session.link_offset,'link_query':session.link_query,'visible_link_limit':160,'max_elements':250},'context_id':session.id,'generation':session.generation,'observation_id':session.observation_id,'url':safe_url(session.page.url),'title':session.last_title,'observed_at':session.observed_at,'viewport':session.page.viewport_size,'elements':redact(elements),'frames':redact(frames),'tabs':redact(tabs),'structure':redact(structure),'text':redact(visible_text),'accessibility':redact(accessibility),'dialogs':session.dialogs[-10:],'screenshot_base64':base64.b64encode(screenshot_bytes).decode(),'screenshot_mime':'image/jpeg','preview_available':bool(screenshot_bytes),'truncated':truncated,'waiting_human':bool(human_signals),'human_signals':human_signals,'content_trust':'untrusted_website_data','policy':{'generic_submit':False,'origins':sorted(session.allowed) if not session.public_web else ['public-https-only'], 'navigation_mode':'public-web' if session.public_web else 'allowlist','network_methods':['GET','HEAD','OPTIONS']+(['POST'] if intermediate_post_permitted(session.page.url,public_web=session.public_web) else [])},'warnings':['No model is connected by this endpoint. Core must interpret these observations.']+([screenshot_error] if screenshot_error else [])}
+
+
+async def resolve_target(session,element,targets=None):
+    """Bind the verified DOM object; do not click a mutable nth() position."""
+    target=(targets if targets is not None else session.targets).get(element['ref'])
+    if target is None:raise HTTPException(409,'Target no longer observed; take a new snapshot')
+    if not element.get('node_identity'):return target  # legacy isolated fixtures
+    handle=await target.element_handle(timeout=1000) if hasattr(target,'element_handle') else target
+    if handle is None or not await handle.evaluate("(e,id)=>globalThis[Symbol.for('next-wave.browser-observer.identity.v1')]?.objects.get(e)===id",element['node_identity']):
+        raise HTTPException(409,'Target changed; observe and re-ground the action',headers={'X-Browser-Outcome':'not_applied'})
+    return handle
 
 
 async def act(session,req:BrowserAction,upload=None,capture_screenshot=True):
@@ -394,6 +409,8 @@ async def act(session,req:BrowserAction,upload=None,capture_screenshot=True):
         raise HTTPException(409,'Observation is stale; observe the page again')
     current,current_elements,_,_,_=await signature(session)
     if session.inspection_incomplete:raise HTTPException(503,'Page inspection incomplete; wait or request human review',headers={'X-Browser-Outcome':'not_applied'})
+    if getattr(session,'consent_required',False) and req.kind not in ('navigate','back','wait','scroll','switch_tab','extract'):
+        raise HTTPException(409,'Citizen consent choice required; do not click through the consent overlay',headers={'X-Browser-Outcome':'not_applied'})
     if verification_page(session.last_visible_text) and req.kind not in ('navigate','back','wait','scroll','switch_tab','extract'):
         raise HTTPException(403,'Site verification requires human assistance; automatic challenge interaction is unavailable')
     if current!=session.fingerprint:
@@ -403,13 +420,13 @@ async def act(session,req:BrowserAction,upload=None,capture_screenshot=True):
         if not target_stable and req.kind not in ('navigate','back','scroll','wait','switch_tab'):
             raise HTTPException(409,'Page changed since observation; observe and re-ground the action')
     element=None;loc=None
-    if req.kind in ('click','fill','select','check','upload','extract'):
+    if req.kind in ('click','fill','select','check','upload','extract','blur'):
         if not req.target_ref or req.target_ref not in session.targets:raise HTTPException(422,'An observed target_ref is required')
-        _,elements,_,_,_=await signature(session)
+        _,elements,current_targets,_,_=await signature(session)
         element=next((e for e in elements if e['ref']==req.target_ref),None)
         old=session.last_elements.get(req.target_ref)
         if not element or not old or target_signature(element)!=target_signature(old):raise HTTPException(409,'Target changed; observe and re-ground the action')
-        loc=session.targets[req.target_ref]
+        loc=await resolve_target(session,element,current_targets)
         upload_confirmation=req.kind=='click' and element.get('category')=='upload_step'
         if upload_confirmation:
             attached=any(e.get('type')=='file' and e.get('file_count') and (e.get('frame_id'),e.get('form_index'))==(element.get('frame_id'),element.get('form_index')) for e in elements)
@@ -421,6 +438,7 @@ async def act(session,req:BrowserAction,upload=None,capture_screenshot=True):
     if req.kind=='navigate':
         await session.check_destination(req.url)
         if IRREVERSIBLE.search(urlsplit(req.url).path+' '+urlsplit(req.url).query):raise HTTPException(403,'Navigation destination resembles an irreversible action')
+    if req.kind=='blur' and (element['tag'] not in ('input','textarea','select') and not element.get('contenteditable')):raise HTTPException(422,'Blur requires an observed editable control')
     if req.kind=='fill' and (element['tag'] not in ('input','textarea') and not element['contenteditable'] or element['type'] in ('file','checkbox','radio','button','submit') or element['readonly']):raise HTTPException(422,'Target is not an editable text field')
     if req.kind=='select' and element['tag']!='select':raise HTTPException(422,'Target is not a select control')
     if req.kind=='check' and element['type'] not in ('checkbox','radio'):raise HTTPException(422,'Target is not a checkbox/radio')
@@ -436,7 +454,9 @@ async def act(session,req:BrowserAction,upload=None,capture_screenshot=True):
         search_scope(session.page.url,element)
     if req.kind=='click':
         if element['tag']=='a' and (not session.permitted(element['href']) or IRREVERSIBLE.search(element['href'])):raise HTTPException(403,'Link destination requires dedicated approval or is not allowlisted')
-        try:await loc.click(trial=True,timeout=min(req.timeout_ms,2000))
+        try:
+            if element.get('requires_scroll'):await loc.scroll_into_view_if_needed(timeout=min(req.timeout_ms,2500))
+            await loc.click(trial=True,timeout=min(req.timeout_ms,3500))
         except BrowserError:raise HTTPException(409,'Target is not currently actionable; resolve any overlay or refresh the observation',headers={'X-Browser-Outcome':'not_applied'}) from None
     session.action_results[req.action_id]=(fingerprint,None)
     session.last_effect_started=True
@@ -452,6 +472,7 @@ async def act(session,req:BrowserAction,upload=None,capture_screenshot=True):
                 from browser.interactions import scoped_interaction
                 await scoped_interaction(session,loc,'upload_form',post_target=element['form_action'])
             else:await loc.click(timeout=req.timeout_ms)
+        elif req.kind=='blur':await loc.evaluate('e=>e.blur()')
         elif req.kind=='fill':await loc.fill(req.value,timeout=req.timeout_ms)
         elif req.kind=='select':await loc.select_option(value=req.values if req.values else req.value,timeout=req.timeout_ms)
         elif req.kind=='check':await loc.set_checked(req.checked,timeout=req.timeout_ms)
@@ -480,12 +501,15 @@ async def act(session,req:BrowserAction,upload=None,capture_screenshot=True):
             effect={'check':'selection_readback','matched':sorted(actual)==sorted(req.values or [req.value])}
         elif req.kind=='check':effect={'check':'checked_readback','matched':await loc.is_checked()==req.checked}
         elif req.kind=='upload':effect={'check':'file_attachment','matched':await loc.evaluate('e=>e.files.length')>0}
+        if req.kind=='click' and element.get('tag')=='a' and element.get('href') and element['href']!=safe_url(before_url):
+            try:await session.page.wait_for_url(lambda url:str(url)!=before_url,timeout=min(req.timeout_ms,2000),wait_until='domcontentloaded')
+            except BrowserError:pass
         after=await observe(session,screenshot=capture_screenshot)
-        if req.kind in ('click','navigate','back','switch_tab','wait'):
+        if req.kind in ('click','navigate','back','switch_tab','wait','blur'):
             new_tabs=[t for t in after.get('tabs',[]) if any(session.tab_id(p)==t['id'] for p in session.context.pages if p not in before_tabs)]
             effect={'check':'interaction_observation','matched':None,'url_changed':session.page.url!=before_url,'new_tabs':new_tabs,'downloads_started':session.download_events-before_downloads,'content_changed':session.last_visible_text!=before_text,'page_status':after.get('page_status'),'validation_errors':[e['validation_message'] for e in after['elements'] if e.get('validation_message')][:20],'confirmed_by_portal':False}
             if req.kind=='click' and element.get('role') in ('option','tab'):
-                try:effect['matched']=await loc.get_attribute('aria-selected',timeout=1000)=='true'
+                try:effect['matched']=await loc.evaluate("e=>e.getAttribute('aria-selected')")=='true'
                 except BrowserError:pass
             if after.get('page_status')!='ready':effect['outcome']='requires_inspection'
         provenance={'target_ref':req.target_ref,'label':element['label'] if element else None,'source_ref':req.source_ref,'verified':req.verified} if req.kind in ('fill','select','check','upload') else None

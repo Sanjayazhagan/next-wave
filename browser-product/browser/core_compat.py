@@ -21,7 +21,7 @@ from fastapi import APIRouter, Header, HTTPException
 from playwright.async_api import TimeoutError as PWTimeout, Error as PWError
 from pydantic import BaseModel, Field
 
-from browser.general import GeneralContext, observe, act, origin, signature, intermediate_post_permitted, bound_tabs, target_signature, watch_navigation, retain_private_value, lock_guard
+from browser.general import GeneralContext, observe, act, origin, signature, intermediate_post_permitted, bound_tabs, target_signature, watch_navigation, retain_private_value, lock_guard, resolve_target
 from browser.step_policy import category, final_path
 from browser.public_web import navigation_mode, NAV_MODE_PUBLIC, assert_public_url
 from browser.general_routes import contexts
@@ -212,7 +212,7 @@ def convert(obs, info):
                        # updated core can use them for rigorous upload checks.
                        'element_type':e.get('type',''),
                        'options':e.get('options',[]),'checked':e.get('checked',False),
-                       'selected':e.get('selected',False),'expanded':e.get('expanded'),'controls':e.get('controls',''),'overlay_id':e.get('overlay_id'),
+                       'selected':e.get('selected',False),'expanded':e.get('expanded'),'controls':e.get('controls',''),'overlay_id':e.get('overlay_id'),'occluded':e.get('occluded',False),'blocker':e.get('blocker'),'requires_scroll':e.get('requires_scroll',False),
                        'disabled':e.get('disabled',False),'readonly':e.get('readonly',False),
                        'href':e.get('href',''),'link_target':e.get('link_target',''),
                        'validation_message':e.get('validation_message',''),
@@ -233,7 +233,7 @@ def convert(obs, info):
     # Core should NEVER forward the unproven screenshot to WhatsApp.
     return {'url':obs['url'],'title':obs['title'],'nodes':output,
             'page_text':obs.get('text','')[:3500],
-            'interaction_state':obs.get('interaction_state',{}),'tabs':obs.get('tabs',[]),'coverage':obs.get('coverage',{}),
+            'consent_required':obs.get('consent_required',False),'interaction_state':obs.get('interaction_state',{}),'tabs':obs.get('tabs',[]),'coverage':obs.get('coverage',{}),
             'page_status':obs.get('page_status','ready'),'http_status':obs.get('http_status'),
             'human_signals':obs.get('human_signals',[]),'needs_reconciliation':bool(info.uncertain_action),
             'observation_truncated':bool(obs.get('truncated',False)),
@@ -422,7 +422,8 @@ async def action_locked(sid,req,info,ctx):
     e=next((x for x in observation['elements'] if x['ref']==e_ref),None)
     if req.target and (not e or (req.target.name != identify(e) and not (req.target.name.startswith(str(identify(e))+' [') and re.fullmatch(r' \[\d+\]',req.target.name[len(str(identify(e))):])))):
         raise HTTPException(409,'Target changed; re-plan using a new snapshot')
-    kind={'click':'click','type':'fill','fill':'fill','upload':'upload','wait':'wait','navigate':'navigate','select':'select','check':'check','back':'back','scroll':'scroll','switch_tab':'switch_tab'}.get(req.type)
+    if e:ctx.targets[e_ref]=await resolve_target(ctx,e)
+    kind={'click':'click','type':'fill','fill':'fill','upload':'upload','wait':'wait','navigate':'navigate','select':'select','check':'check','back':'back','scroll':'scroll','switch_tab':'switch_tab','blur':'blur'}.get(req.type)
     if not kind:raise HTTPException(422,'Unsupported core action')
     if req.type=='type' and e and e['tag']=='select':kind='select'
     if req.type=='click' and e and e.get('type') in ('checkbox','radio'):

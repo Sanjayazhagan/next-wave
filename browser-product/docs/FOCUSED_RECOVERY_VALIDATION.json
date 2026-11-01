@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-01",
+  "pytest": {"passed": 128, "failed": 0, "warnings": 1, "seconds": 224.09},
+  "warning": "Upstream Starlette/httpx deprecation",
+  "public_retest": "One bounded 15-site pass; two diagnostic search clicks and one corrected NOAA check",
+  "verified_search_navigation": ["Walmart", "IKEA", "Coursera", "DuckDuckGo", "Wikipedia"],
+  "noaa": "Corrected source-bound handoff reached search.usa.gov; returned empty/loading content, not verified search results",
+  "residuals": {
+    "Flipkart": "Persistent HTTP409 after bounded recovery; no force click",
+    "Guardian": "Incomplete inspection; not a verified flow",
+    "Node.js and CNN": "URL-change effect false; navigation not proved"
+  },
+  "deployment_performed": false,
+  "actual_model_or_chat_tested": false
+}
