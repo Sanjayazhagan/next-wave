@@ -29,7 +29,7 @@ sudo docker compose --env-file .env -f compose.yaml -f compose.vm.yaml -f compos
 curl -fsS http://127.0.0.1:8100/ready
 ```
 
-Confirm HTTPS, Caddy's `/core-assist/` route, and that only 80, 443 and restricted SSH 22 are open inbound. Do not expose 8100/8101. Keep `BROWSER_ENABLE_FINAL_SUBMIT=false`.
+Confirm HTTPS, the `/core-assist/` landing page (HTTP 200 with **no** browser/session content), a **generated** `/core-assist/{task_id}#token` invitation, and that only 80, 443 and restricted SSH 22 are open inbound. Do not expose 8100/8101. Keep `BROWSER_ENABLE_FINAL_SUBMIT=false`. The root landing page is not a valid CAPTCHA link.
 
 **To optionally enable reviewed intermediate POSTs** for a specific authorized target, set `BROWSER_INTERMEDIATE_POST_ORIGINS=https://exact-portal-origin` in `.env` and recreate the worker via the three-file Compose command. Without this review, OTP-request controls can still use their narrowly scoped auth writes, but generic agent-controlled Next/Save/Upload POSTs remain restricted.
 

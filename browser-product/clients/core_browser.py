@@ -39,10 +39,13 @@ class CoreBrowserClient:
             if snapshot.get('consent_required'):return {'paused':True,'reason':'citizen_consent_choice_required','human_signals':snapshot.get('human_signals',[])}
             if snapshot.get('session_expired'):return {'paused':True,'reason':'session_expired','requires_reauthentication':True}
             if snapshot.get('needs_reconciliation'):return {'paused':True,'reason':'action_outcome_unknown'}
+            # CAPTCHA walls can be classified as `blocked` while still
+            # containing a trustworthy challenge signal. Offer a human link
+            # before handling that status as a generic navigation failure.
+            if snapshot.get('challenge') and snapshot.get('page_status','ready') in ('ready','blocked'):
+                return {'paused':True,'reason':'human_verification','challenge':snapshot['challenge']}
             if snapshot.get('page_status','ready')!='ready':
                 return {'paused':True,'reason':snapshot['page_status'],'human_signals':snapshot.get('human_signals',[])}
-            if snapshot.get('challenge'):
-                return {'paused':True,'reason':'human_verification','challenge':snapshot['challenge']}
             action=await decide(snapshot)
             if action is None:return {'paused':True,'reason':'core_requested_pause'}
             action={**action,'action_id':action.get('action_id') or str(uuid.uuid4())}

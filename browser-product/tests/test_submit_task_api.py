@@ -85,3 +85,29 @@ def test_public_origin_uses_only_configured_https_and_fails_clearly_in_azure(mon
     for value in ['https://attacker@browser.example.org','http://browser.example.org','https://browser.example.org/redirect','https://bad host']:
         monkeypatch.setenv('PUBLIC_BASE_URL',value)
         with pytest.raises(HTTPException):public_origin()
+
+@pytest.mark.asyncio
+async def test_completed_practice_submission_without_receipt_polls_durably(api_setup):
+    """A successful Selenium-like form has no receipt but is not uncertain."""
+    evidence={
+        'state':'completed','outcome':'portal_confirmed',
+        'confirmation_evidence':'reviewed_confirmation',
+        'confirmed_by_portal':True,'receipt_number':None,
+        'click_attempted':True,'request_observed':True,'needs_reconciliation':False,
+        'url':'https://www.selenium.dev/selenium/web/submitted-form.html',
+    }
+    async def worker(method,path,payload=None,timeout=20):
+        if path.endswith('/human-act'):return evidence
+        return {'state':'paused_for_human'}
+    api_setup.setattr(app,'worker',worker)
+    task=await offered()
+    token=task['assistance_path'].split('#')[1]
+    result=await assist.control(task['task_id'],control_request(),token)
+    assert result==evidence
+    polled=await assist.status('browser-session',app.KEY)
+    assert polled['state']=='completed' and polled['receipt_number'] is None
+    assert polled['outcome']=='portal_confirmed' and polled['confirmation_evidence']=='reviewed_confirmation'
+    assert not polled['needs_reconciliation']
+    assert 'page_text' not in polled
+    with pytest.raises(HTTPException):await assist.control(task['task_id'],control_request(),token)
+    assert (await assist.status('browser-session',app.KEY))['state']=='completed'

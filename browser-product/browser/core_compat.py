@@ -185,7 +185,20 @@ def challenge_info(obs, nodes):
                     if role_of(candidate)=='button' and re.search(r'verify|continue|check|sign in|login',label,re.I):
                         submit = {'role':'button','name':nodes[candidate['ref']]}
                         break
-                return {'kind':kind,'input':input_target,'submit':submit}
+                # Telegram must not be sent a whole-page or stale cropped image.
+                # Citizen verification uses a separately issued, short-lived
+                # capability link to this *same* live browser session.
+                return {'kind':kind,'input':input_target,'submit':submit,
+                        'image_base64':None,'delivery_mode':'human_assistance_link',
+                        'human_task_reason':kind,'requires_human':True}
+    # Some CAPTCHA widgets (for example an iframe checkbox) have no page-level
+    # editable input. Still expose a challenge so the agent can request the
+    # human link instead of proceeding or looking for a nonexistent image.
+    if (any(e.get('category')=='captcha_widget' for e in obs.get('elements',[]))
+            or any(signal.get('kind')=='challenge_frame' for signal in obs.get('human_signals',[]))):
+        return {'kind':'captcha','input':None,'submit':None,
+                'image_base64':None,'delivery_mode':'human_assistance_link',
+                'human_task_reason':'captcha','requires_human':True}
     return None
 
 

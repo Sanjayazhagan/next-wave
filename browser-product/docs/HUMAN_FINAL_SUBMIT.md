@@ -122,7 +122,7 @@ An active bounded human lease protects the browser from idle cleanup and
 ordinary session-close requests until completion/cancellation/expiry. A result
 does not automatically close the context. Submit tasks cannot click through
 authentication or CAPTCHA; complete those first through their existing tasks.
-CAPTCHA remains a handoff-link feature; no cropped image delivery is included.
+CAPTCHA remains a handoff-link feature; no cropped image delivery is included. A CAPTCHA/OTP snapshot now includes `challenge.delivery_mode="human_assistance_link"`, `challenge.human_task_reason` and `challenge.image_base64=null` to make that contract explicit to chat adapters. The trusted backend calls `POST /core-browser/session/{sid}/human-task` with the detected challenge reason, then forwards the generated `assistance_url` privately. The bare `/core-assist/` is only a harmless information page, not a challenge session.
 
 Only complete same-origin native GET/POST forms are supported by the manual
 submit path. A one-request scope permits that exact reviewed form destination

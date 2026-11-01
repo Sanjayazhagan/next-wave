@@ -13,7 +13,7 @@ import uuid
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Header, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
 router=APIRouter(tags=['real human takeover'])
@@ -125,6 +125,26 @@ async def status(sid:str,x_internal_key:str|None=Header(None)):
             result['state']='needs_reconciliation'
             result['worker_available']=False
     return result
+
+
+@router.get('/core-assist/', include_in_schema=False)
+async def assistance_entry():
+    """Non-sensitive landing page for a missing invitation, never a session view."""
+    return HTMLResponse(
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<title>GradientZero verification link required</title></head><body>'
+        '<main><h1>Verification link required</h1><p>Open the complete '
+        'temporary link sent by your assistant. This address alone cannot '
+        'open a browser session.</p><p>If your link has expired, request a '
+        'new one from your assistant.</p></main></body></html>',
+        headers={
+            'Cache-Control':'no-store',
+            'Referrer-Policy':'no-referrer',
+            'X-Content-Type-Options':'nosniff',
+            'Content-Security-Policy':"default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+        },
+    )
 
 
 @router.get('/core-assist/{task_id}',name='core_assist_page')

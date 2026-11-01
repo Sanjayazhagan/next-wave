@@ -3,8 +3,9 @@ import asyncio
 import time
 from urllib.parse import urlsplit
 from fastapi import HTTPException
-from browser.general import signature,observe,resolve_target,origin
+from browser.general import signature,observe,resolve_target,origin,safe_url
 from browser.native_submit import click_reviewed_submit
+from browser.submit_confirmation import confirmation_evidence
 
 def stopped(state,reason,**extra):
     return {'state':state,'reason':reason,'confirmed_by_portal':False,'receipt_number':None,'click_attempted':False,'needs_reconciliation':False,**extra}
@@ -77,8 +78,20 @@ async def click(info,ctx,req):
             except Exception:pass
             after=await observe(ctx,screenshot=False)
             receipt=receipt_from_observation(after,info)
-            confirmed=bool(requested and receipt and after.get('page_status')=='ready' and ctx.fingerprint!=info.submit_review['fingerprint'])
-            result={'state':'completed' if confirmed else 'uncertain','confirmed_by_portal':confirmed,'receipt_number':receipt,'click_attempted':True,'request_observed':requested,'needs_reconciliation':not confirmed,'url':after['url'],'page_status':after.get('page_status'),'page_text':after.get('text','')[:2000],'content_trust':'untrusted_website_data'}
+            evidence=confirmation_evidence(
+                info.submit_review['url'], after, request_observed=requested,
+                changed=ctx.fingerprint!=info.submit_review['fingerprint'], receipt=receipt,
+            )
+            confirmed=bool(evidence)
+            # Do not push arbitrary confirmation-page text (possibly including
+            # citizen data) into the durable status record or the bot response.
+            result={'state':'completed' if confirmed else 'uncertain',
+                    'outcome':'portal_confirmed' if confirmed else 'requires_reconciliation',
+                    'confirmation_evidence':evidence,
+                    'confirmed_by_portal':confirmed,'receipt_number':receipt if confirmed else None,
+                    'click_attempted':True,'request_observed':requested,
+                    'needs_reconciliation':not confirmed,'url':safe_url(after['url']),
+                    'page_status':after.get('page_status'),'content_trust':'untrusted_website_data'}
             convert(after,info);info.fingerprint=ctx.fingerprint
             if confirmed:info.uncertain_action=None
     except asyncio.CancelledError:
