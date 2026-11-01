@@ -401,7 +401,10 @@ class Nodes:
         scheme = state.get("scheme") or {}
         documents = [ExtractedDocument.model_validate(d) for d in state.get("documents", [])]
         request = DoctorRequest(
-            profile=profile_of(state), documents=documents, scheme_id=scheme.get("scheme_id")
+            profile=profile_of(state),
+            documents=documents,
+            scheme_id=scheme.get("scheme_id"),
+            language=state.get("language") or self.d.settings.default_language,
         )
         try:
             report = DoctorResponse.model_validate(await call(self.d.plugins.doctor, request))

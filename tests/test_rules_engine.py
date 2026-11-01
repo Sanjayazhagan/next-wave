@@ -108,9 +108,10 @@ def test_plugin_response_skips_not_eligible(tmp_path):
     d = scheme(tmp_path, [STATE], scheme_id="d")
     resp = rank_with([a, c, d], EligibilityRequest(profile=profile(annual_income=1, state="Kerala")))
     assert isinstance(resp, EligibilityResponse)
-    assert [(s.scheme_id, s.rank) for s in resp.schemes] == [("a", 1), ("c", 2)]
+    # c still needs the gender: it isn't offered, its question is returned instead.
+    assert [(s.scheme_id, s.rank) for s in resp.schemes] == [("a", 1)]
     assert "example.gov.in" in resp.schemes[0].cited_clause
-    assert resp.schemes[1].cited_clause.startswith("To check Test c, I need your gender")
+    assert [q.field for q in resp.questions] == ["gender"]
 
 
 def test_questions_on_empty_profile(tmp_path):
@@ -206,3 +207,14 @@ def test_arunthathiyar_counts_as_scheduled_caste(tmp_path):
     rule = {**COMMUNITY, "value": ["SC", "ST"]}
     s = scheme(tmp_path, [rule])
     assert match(s, profile(community="SCA")).status == "eligible"
+
+
+@pytest.mark.parametrize("gender,offered", [
+    ("female", True), ("Female", True), ("girl", True), ("பெண்", True), ("महिला", True), ("लड़की", True),
+    ("male", False), ("boy", False), ("ஆண்", False), ("पुरुष", False), ("लड़का", False),
+    ("transgender", False), ("திருநங்கை", False),
+    (None, False), ("something", False),           # unknown or unclear: never offered on a guess
+])
+def test_girls_only_scheme_is_offered_only_to_girls(gender, offered):
+    answers = {} if gender is None else {"gender": gender}
+    assert ("aicte-pragati-degree" in [s.scheme_id for s in ranked(**answers).schemes]) is offered

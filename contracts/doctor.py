@@ -9,11 +9,12 @@ class DoctorRequest(BaseModel):
     profile: Profile
     documents: list[ExtractedDocument]
     scheme_id: str | None = None
+    language: str = "en"  # The chat's language (ISO 639-1); mismatches come back in it.
 
 
 class Mismatch(BaseModel):
-    field: str
-    detail: str  # Must not repeat Aadhaar or bank numbers.
+    field: str  # A readable heading, such as "Income certificate", in the request's language.
+    detail: str  # Shown to the user. Must not repeat Aadhaar or bank numbers.
 
 
 class DoctorResponse(BaseModel):

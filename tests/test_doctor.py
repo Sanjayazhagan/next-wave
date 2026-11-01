@@ -99,7 +99,7 @@ def test_plugin_contract_and_no_sensitive_numbers():
     docs = [doc("marksheet", full_name="S Satyajit", aadhaar_last4="9012"), doc("income", full_name="Ramesh Kumar")]
     resp = check_application(DoctorRequest(profile=prof(), documents=docs, scheme_id="unknown-scheme"))
     assert isinstance(resp, DoctorResponse) and 0 <= resp.risk_score <= 1
-    assert resp.mismatches[0].field == "full_name" and "9012" not in resp.model_dump_json()
+    assert resp.mismatches[0].field == "Name" and "9012" not in resp.model_dump_json()
 
 
 def test_income_certificate_in_parents_name_is_not_a_mismatch():
@@ -130,7 +130,7 @@ def test_central_obc_asks_for_state_certificate(tmp_path):
     from tests.rules_helpers import COMMUNITY
     p = Profile(fields={"community": ProfileField(value="OBC", source_document="community", confidence=1.0)})
     f = checks.eligibility_recheck(p, scheme(tmp_path, [COMMUNITY]))
-    assert f[0].severity == "medium" and "Tamil Nadu community certificate" in f[0].fix
+    assert f[0].severity == "medium" and "from the Tamil Nadu government" in f[0].fix
 
 
 def _cert(doc_type="community", **qr):
@@ -163,3 +163,49 @@ def test_unreadable_or_missing_qr_on_e_district_certificate():
     assert checks.authenticity([_cert(qr_status="absent")])[0].severity == "medium"
     other = doc("community", full_name="Satyajit", certificate_number="12/2019", qr_status="absent")
     assert checks.authenticity([other]) == []
+
+
+
+def test_headings_are_readable_never_raw_field_names():
+    from modules.doctor.messages import heading
+    assert heading("date_validity", "valid_until", "income") == "Income certificate"
+    assert heading("name_consistency", "full_name", None) == "Name"
+    assert heading("field_consistency", "father_name", None) == "Father's name"
+    assert heading("eligibility_recheck", None, None) == "Eligibility"
+    resp = check_application(DoctorRequest(profile=prof(), documents=[
+        doc("income", full_name="Satyajit", issue_date="2024-02-27", valid_until="2025-02-26")]))
+    assert all("_" not in m.field for m in resp.mismatches)
+
+
+def test_findings_are_translated_with_values_kept(monkeypatch):
+    import importlib
+    loc = importlib.import_module("modules.doctor.localize")
+    sent = []
+
+    def fake_post(url, timeout, json):
+        sent.append(json)
+        return httpx.Response(200, json={"text": f"[ta] {json['text']}"}, request=httpx.Request("POST", url))
+
+    import httpx
+    monkeypatch.setenv("LANGUAGE_SERVICE_URL", "http://language.test")
+    monkeypatch.setattr(loc.httpx, "post", fake_post)
+    out = loc.localize([("Name", "Your name is 'SATYAJIT S' on the marksheet."), ("Weird heading", "x")], "ta", ["Pragati"])
+    assert out[0] == ("பெயர்", "[ta] Your name is 'SATYAJIT S' on the marksheet.")   # table heading
+    assert out[1][0] == "[ta] Weird heading"                                          # unknown heading: service
+    assert "SATYAJIT S" in sent[0]["keep"] and "Pragati" in sent[0]["keep"] and sent[0]["target"] == "ta"
+
+
+def test_findings_stay_in_english_without_a_working_service(monkeypatch):
+    import httpx
+    import importlib
+    loc = importlib.import_module("modules.doctor.localize")
+    monkeypatch.delenv("LANGUAGE_SERVICE_URL", raising=False)
+    assert loc.localize([("Name", "Fix it.")], "ta") == [("பெயர்", "Fix it.")]
+    monkeypatch.setenv("LANGUAGE_SERVICE_URL", "http://language.test")
+
+    def down(url, timeout, json):
+        raise httpx.ConnectError("down")
+
+    monkeypatch.setattr(loc.httpx, "post", down)
+    assert loc.localize([("Name", "Fix it.")], "hi") == [("नाम", "Fix it.")]
+    assert loc.localize([("Name", "Fix it.")], "en") == [("Name", "Fix it.")]

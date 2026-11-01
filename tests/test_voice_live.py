@@ -3,17 +3,12 @@
 Only Telegram's servers are faked (they hand over the voice-note files). Needs a Sarvam key in
 .env and the voice notes in fixtures/voice/; skipped otherwise.
 """
-import os
-import socket
-import subprocess
-import sys
-import time
 
 import httpx
 import pytest
 
 from tests.conftest import LANGUAGE_URL, Network
-from tests.remote_helpers import FIXTURES, has_keys, needs_ffmpeg
+from tests.remote_helpers import FIXTURES, has_keys, needs_ffmpeg, real_language_url  # noqa: F401
 from tests.test_telegram import BOT_TOKEN, SECRET, USER_ID, TelegramChat
 
 VOICE = FIXTURES / "voice"
@@ -24,31 +19,8 @@ pytestmark = [pytest.mark.live, needs_ffmpeg,
               pytest.mark.skipif(not all(p.exists() for p in NOTES.values()), reason="no fixtures/voice notes")]
 
 
-@pytest.fixture(scope="module")
-def language_url():
-    """The real language service, in its own process, on a free port."""
-    from common.config import dotenv_values
-
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        port = s.getsockname()[1]
-    env = {**os.environ, **dotenv_values(), "LANG_PRIMARY": "sarvam", "STT_PRIMARY": "sarvam",
-           "SARVAM_STT_MODE": "codemix"}
-    proc = subprocess.Popen([sys.executable, "-m", "uvicorn", "modules.language.app:app", "--port", str(port)],
-                            env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    url = f"http://127.0.0.1:{port}"
-    for _ in range(60):
-        try:
-            if httpx.get(f"{url}/health", timeout=1).status_code == 200:
-                break
-        except httpx.HTTPError:
-            time.sleep(0.5)
-    yield url
-    proc.terminate()
-    proc.wait(timeout=10)
-
-
-def test_a_conversation_answered_by_voice(make_client, network: Network, language_url: str) -> None:
+def test_a_conversation_answered_by_voice(make_client, network: Network, real_language_url: str) -> None:
+    language_url = real_language_url
     heard = []
 
     def real_language(request: httpx.Request) -> httpx.Response:

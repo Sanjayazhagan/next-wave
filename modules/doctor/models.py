@@ -17,6 +17,7 @@ class Finding(BaseModel):
     points: int
     detail: str
     values_by_doc: dict[str, str] = {}
+    document: str | None = None   # the document a finding is about, if any (for its heading)
     fix: str                 # one action sentence in English
 
 

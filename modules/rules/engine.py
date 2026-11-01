@@ -14,8 +14,11 @@ STATE_BACKWARD = {"BC", "BCM", "MBC", "DNC"}
 # Tamil Nadu sub-categories: BC Muslims have an internal share of the Backward Classes quota, and
 # Arunthathiyars of the Scheduled Castes quota. A rule that lists the parent includes them.
 PARENT = {"BCM": "BC", "SCA": "SC"}
-_GENDER = {"female": {"female", "f", "girl", "woman", "pen", "பெண்"}, "male": {"male", "m", "boy", "man", "aan", "ஆண்"},
-           "transgender": {"transgender", "third gender", "other"}}
+_GENDER = {
+    "female": {"female", "f", "girl", "woman", "pen", "penn", "பெண்", "மகள்", "महिला", "लड़की", "स्त्री", "औरत"},
+    "male": {"male", "m", "boy", "man", "aan", "ஆண்", "மகன்", "पुरुष", "लड़का", "आदमी"},
+    "transgender": {"transgender", "third gender", "other", "திருநங்கை", "திருநம்பி", "ट्रांसजेंडर", "किन्नर"},
+}
 _STATES = {"tn": "tamil nadu", "tamilnadu": "tamil nadu", "tamil nadu": "tamil nadu", "தமிழ்நாடு": "tamil nadu",
            "ap": "andhra pradesh", "ka": "karnataka", "kl": "kerala", "up": "uttar pradesh", "mh": "maharashtra"}
 _YES = {"yes", "y", "true", "ஆம்"}

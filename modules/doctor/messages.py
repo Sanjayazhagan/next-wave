@@ -1,9 +1,28 @@
-"""One English fix sentence per check. Core translates them and can add Confirm / Upload buttons."""
+"""A readable heading and one English fix sentence per finding. localize.py translates them."""
 from __future__ import annotations
 
 DOC_NAMES = {"marksheet": "marksheet", "income": "income certificate", "community": "community certificate"}
-FIELD_NAMES = {"full_name": "name", "father_name": "father's name", "date_of_birth": "date of birth",
-               "community": "community", "annual_income": "family income"}
+FIELD_NAMES = {"full_name": "name", "father_name": "father's name", "mother_name": "mother's name",
+               "date_of_birth": "date of birth", "community": "community", "annual_income": "family income",
+               "gender": "gender", "state": "state", "course": "course", "marks_percentage": "marks percentage",
+               "disability_percent": "disability percentage", "govt_school_6_to_12": "schooling (Class 6 to 12)",
+               "issue_date": "issue date", "valid_until": "validity", "certificate_number": "certificate number"}
+
+
+def label(field: str) -> str:
+    """'valid_until' -> 'validity': never a raw field name in front of a user."""
+    return FIELD_NAMES.get(field, field.replace("_", " "))
+
+
+def heading(check: str, field: str | None, document: str | None) -> str:
+    """The short heading core shows before a fix ("Income certificate", "Name")."""
+    if document and check in ("file_spec", "image_quality", "date_validity", "authenticity"):
+        return doc(document).capitalize()
+    if check == "eligibility_recheck":
+        return "Eligibility"
+    if check == "required_docs":
+        return "Missing document"
+    return label(field).capitalize() if field else "Documents"
 
 
 def doc(d: str) -> str:
@@ -32,8 +51,9 @@ def needs_info(name: str, fields: list[str]) -> str:
 
 
 def state_community(name: str) -> str:
-    return (f"Your community certificate is a central OBC certificate, but {name} needs a Tamil Nadu community "
-            f"certificate showing BC, MBC or DNC. Upload your state community certificate.")
+    # Worded for machine translation: "central OBC" came back in Tamil as "important OBC".
+    return (f"Your community certificate is an OBC certificate from the Government of India, but {name} needs a "
+            f"community certificate from the Tamil Nadu government showing BC, MBC or DNC. Upload that certificate.")
 
 
 def missing_doc(d: str, name: str) -> str:

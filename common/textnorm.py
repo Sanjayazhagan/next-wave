@@ -9,12 +9,18 @@ _PUNCT = re.compile(r"[^\w\s/\-]", re.UNICODE)
 _WS = re.compile(r"\s+")
 
 
+def _keep(ch: str) -> bool:
+    # Letters, digits and combining signs: Tamil and Hindi vowel signs and viramas (்  ா  ि)
+    # are combining marks, not letters, and dropping them turns "ஆண்" into "ஆண".
+    return ch.isalnum() or unicodedata.category(ch).startswith("M") or ch in " /-_" or ch.isspace()
+
+
 def norm_text(s: str | None) -> str:
     """Casefold, NFKC, strip punctuation except / and -, collapse whitespace."""
     if s is None:
         return ""
     s = unicodedata.normalize("NFKC", str(s)).casefold()
-    s = _PUNCT.sub(" ", s)
+    s = "".join(ch if _keep(ch) else " " for ch in s)
     return _WS.sub(" ", s).strip()
 
 

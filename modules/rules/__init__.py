@@ -48,8 +48,12 @@ def to_contract(question: Question) -> SchemeQuestion:
 
 
 def rank_with(schemes: tuple[Scheme, ...] | list[Scheme], request: EligibilityRequest) -> EligibilityResponse:
-    """Eligible and needs-info schemes, best first. Schemes the user fails are left out."""
-    matches = [m for m in rank(schemes, request.profile) if m.status != "not_eligible"]
+    """Schemes the user qualifies for, best first, and the questions that decide the rest.
+
+    A scheme that still needs a detail (gender for a girls-only scheme) is not offered: core asks
+    each question once, and an unclear answer must not leave a boy looking at a girls' scheme.
+    """
+    matches = [m for m in rank(schemes, request.profile) if m.status == "eligible"]
     return EligibilityResponse(schemes=[
         ContractMatch(scheme_id=m.scheme_id, name=m.name, portal_id=portal_for(m.portal_id), rank=i,
                       cited_clause=cited_clause(m))
