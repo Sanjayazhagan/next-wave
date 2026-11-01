@@ -26,10 +26,11 @@ from app.plugins import PluginError, Plugins, call
 from app.redact import mask_for_display, redact
 from app.sessions import SessionStore
 from app.skills import SkillStep, SkillStore
-from app.states import indian_state
+from app.states import indian_state, states_in_message
 from app.vault import FileStore, Vault
 from common.corrections import normalize as normalize_value
 from common.corrections import parse_draft_edit
+from common.textnorm import one_amount
 from contracts.browser import Action, Snapshot
 from contracts.doctor import DoctorRequest, DoctorResponse
 from contracts.documents import DocumentImage, ExtractedDocument, ExtractionResult
@@ -310,9 +311,17 @@ class Nodes:
             if not value:
                 return {}
             if question.field == "state":
-                value = indian_state(value)
+                # A spoken answer arrives as a sentence ("I am in Tamil Nadu"): take it only when
+                # it names exactly one state.
+                named = states_in_message(value)
+                value = indian_state(value) or (named[0] if len(named) == 1 else None)
                 if value is None:
                     return {}  # Not a place we know, so the question comes round again.
+            elif question.digits_only:
+                # Store digits, not the sentence: "Our income is ₹2,00,000." -> 200000.
+                value = clean_answer(question, value, strict=True) or one_amount(value)
+                if value is None:
+                    return {}
             return {
                 "profile": with_answer(state, question.field, value, "user_answer"),
                 "answered": [*answered, question.field],

@@ -87,6 +87,9 @@ class Router:
             raise AllProvidersFailed("translate", {"config": "no language provider has its keys set"})
         restored, missing, name = best
         if missing:
-            log.warning("translation dropped %d protected terms; appended them", len(missing))
-            restored = f"{restored} ({', '.join(missing)})"
+            # Every provider lost a token, which can leave a stray "0" where an amount was
+            # ("income is 0."). Translating the plain text is safer: amounts survive, though
+            # a scheme name may get translated.
+            log.warning("translation dropped %d protected terms; translated without them", len(missing))
+            restored, name, _ = await self.run("translate", lambda p: p.translate(text, src, tgt))
         return restored, name, round((time.perf_counter() - t0) * 1000)

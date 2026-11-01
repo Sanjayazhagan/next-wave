@@ -25,9 +25,10 @@ then the fallback is tried. If both fail, the reply is `503` with both errors.
   so without a hint it uses `STT_DEFAULT_LANG`.
 - `/tts` returns WAV. Core converts it to OGG/Opus for voice notes.
 - `/translate` keeps rupee amounts, dates, ID-like tokens and every `keep` term
-  intact: they are swapped for tokens `⟦0⟧, ⟦1⟧ ...` before translation and put
-  back afterwards. If a provider drops a token, the other provider is tried; if
-  both drop it, the original values are appended in brackets.
+  intact: they are swapped for tokens `#0#, #1# ...` before translation and put
+  back afterwards (`#0#` is the token style Sarvam leaves alone; `⟦0⟧` was mangled into a bare
+  "0"). If a provider drops a token, the other provider is tried; if both do, the plain text is
+  translated instead, so an amount is never lost.
 - Language codes are ISO 639-1 (`ta`, `en`, `hi` ...), the same as core.
 - Logs (`$LOG_DIR/language.jsonl`) hold operation, provider, latency and input
   length only, never the text or audio.

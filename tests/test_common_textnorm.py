@@ -46,3 +46,15 @@ from common.textnorm import strip_honorifics  # noqa: E402
 ])
 def test_strip_honorifics(raw, expected):
     assert strip_honorifics(raw) == expected
+
+
+from common.textnorm import one_amount  # noqa: E402
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("Our household annual income is ₹2,00,000.", "200000"), ("about 2 lakh", "200000"),
+    ("120000", "120000"), ("Rs. 1,44,000/- per year", "144000"),
+    ("I am 19 and we earn 2 lakh", None), ("no idea", None),
+])
+def test_one_amount(text, expected):
+    assert one_amount(text) == expected
