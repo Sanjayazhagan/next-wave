@@ -1,15 +1,15 @@
+%% Dakiya architecture (same diagram as the README).
 flowchart LR
-  U[Citizen on Telegram<br/>@Dakiya_seva_bot or web app] --> G[FastAPI gateway<br/>Telegram webhook, session API]
-  G <--> L[Language service<br/>Bhashini, Sarvam fallback]
-  G --> O[LangGraph orchestrator<br/>pause and resume]
-  O --> X[Document extraction<br/>vision model + OCR agreement]
-  O --> E[Eligibility rule engine<br/>reviewed rules, cited clauses]
-  O --> D[Application doctor]
-  O --> F[File compressor]
-  O --> V[(Encrypted vault)]
-  O --> S[(Skill library)]
-  O --> B[Browser worker<br/>Playwright]
-  B --> P[Government portal]
-  C[Chaos script] -. inject .-> B
-  O -- event stream --> W[Web app]
-  H[Benchmark harness] --> G
+    U["Student on Telegram"] <--> G["FastAPI gateway<br/>Telegram webhook, session API"]
+    G <--> L["Language service<br/>Sarvam speech, translation, voice<br/>Bhashini fallback"]
+    G --> O["LangGraph agent<br/>checkpoint every step"]
+    O <--> V[("Encrypted SQLite<br/>vault, files, checkpoints")]
+    O <--> S[("Skill library<br/>saved portal steps")]
+    O --> X["Extraction<br/>Groq vision + Tesseract OCR"]
+    O --> R["Rule engine<br/>reviewed YAML rules"]
+    O --> D["Doctor<br/>mismatch, expiry, QR"]
+    O --> C["Compressor<br/>fits upload limits"]
+    O --> B["Browser service<br/>Playwright"]
+    B --> P["Practice portal"]
+    K["Chaos script"] -. "breaks the page on purpose" .-> B
+    O -- "event stream" --> W["Web app / audit trail"]
