@@ -99,6 +99,7 @@ class GeneralContext:
     write_event:object=None
     write_scope:tuple|None=None  # (origin, intent, optional exact URL); only during a vetted click
     human_captcha_until:float=0.0
+    human_lease_until:float=0.0
 
     def permitted(self,url):
         if self.public_web:

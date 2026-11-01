@@ -1,0 +1,62 @@
+{
+  "properties": {
+    "reason": {
+      "pattern": "^(otp|captcha|login|upload|verification|submit|other)$",
+      "title": "Reason",
+      "type": "string"
+    },
+    "review_observation_id": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "minLength": 8,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Review Observation Id"
+    },
+    "approval_ref": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "minLength": 8,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Approval Ref"
+    },
+    "target_ref": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target Ref"
+    },
+    "ttl_seconds": {
+      "default": 300,
+      "maximum": 600,
+      "minimum": 60,
+      "title": "Ttl Seconds",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "reason"
+  ],
+  "title": "Offer",
+  "type": "object"
+}

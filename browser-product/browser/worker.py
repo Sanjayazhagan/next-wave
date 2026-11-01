@@ -40,9 +40,9 @@ async def reap_idle():
         cutoff = time.time()-int(os.getenv('MAX_BROWSER_IDLE_SECONDS','900'))
         from browser.general_routes import contexts
         for ident,context in list(contexts.items()):
-            if context.last_used<cutoff and not context.lock.locked():
+            if context.last_used<cutoff and time.time()>=getattr(context,'human_lease_until',0) and not context.lock.locked():
                 async with context.lock:
-                    if context.last_used<cutoff:
+                    if context.last_used<cutoff and time.time()>=getattr(context,'human_lease_until',0):
                         contexts.pop(ident,None);context.private_values.clear();await context.context.close()
                         from browser.core_compat import bridges
                         for bridge_id,info in list(bridges.items()):
