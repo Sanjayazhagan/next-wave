@@ -93,13 +93,17 @@ request works. A real translation answers 503 until a valid Sarvam key is set.
 Put a few real Telegram voice notes in `fixtures/voice/*.ogg` (git-ignored), then:
 
 ```bash
-uv run python scripts/compare_stt.py
+uv run python -m scripts.compare_stt
 ```
 
 It prints each provider's transcript and latency per file, including Sarvam's
 `codemix` mode, which writes English words in Latin script.
 
-Decision: [[NUMBER: STT_PRIMARY choice after compare_stt.py]]
+Decision (1 Nov 2026): **`STT_PRIMARY=sarvam` with `SARVAM_STT_MODE=codemix`**, and
+`LANG_PRIMARY=sarvam` while Bhashini isn't configured. On three Tamil voice notes (made with
+Sarvam's text-to-speech, so cleaner than real phone audio), code-mix mode wrote English words in
+English ("Scholarship apply பண்ணணும்", "BE முதல் ஆண்டு") and amounts as digits ("₹2,00,000"),
+and was faster (130-480 ms). Recheck with real voice notes when you have them.
 
 ## Provider docs used
 
