@@ -19,6 +19,7 @@ def build_graph(deps: Deps, checkpointer: BaseCheckpointSaver) -> Any:
         "collect_documents", "extract_profile", "match_schemes", "ask_scheme_question",
         "choose_scheme", "doctor", "prepare_portal",
         "portal_login", "browser_step", "challenge", "human_link", "human_wait",
+        "ask_form_choice", "ask_form_consent",
         "ask_field", "handover",
         "save_skill", "prepare_review", "review", "edit", "submit", "receipt",
         "finish",
@@ -78,6 +79,8 @@ def build_graph(deps: Deps, checkpointer: BaseCheckpointSaver) -> Any:
             "challenge": "challenge",
             "human_link": "human_link",
             "human_wait": "human_wait",
+            "form_choice": "ask_form_choice",
+            "form_consent": "ask_form_consent",
             "ask_field": "ask_field",
             "handover": "handover",
             "reached_review": "save_skill",
@@ -97,6 +100,7 @@ def build_graph(deps: Deps, checkpointer: BaseCheckpointSaver) -> Any:
     route_targets = [
         "browser_step", "portal_login", "prepare_portal", "challenge", "ask_field",
         "handover", "save_skill", "receipt", "finish", "human_link", "human_wait",
+        "ask_form_choice", "ask_form_consent",
     ]
 
     graph.add_edge(START, "choose_language" if deps.settings.choose_language else "consent")
@@ -132,7 +136,7 @@ def build_graph(deps: Deps, checkpointer: BaseCheckpointSaver) -> Any:
     graph.add_edge("doctor", "prepare_portal")
     for name in (
         "prepare_portal", "portal_login", "browser_step", "challenge", "handover", "submit",
-        "human_link", "human_wait",
+        "human_link", "human_wait", "ask_form_choice", "ask_form_consent",
     ):
         graph.add_conditional_edges(name, by_route, route_targets)
     graph.add_conditional_edges("ask_field", after_field, ["ask_field", "browser_step"])

@@ -37,9 +37,11 @@ Choose the single next action towards the goal. Reply with only this JSON:
  "intent": "short description of this step", "reasoning": "one sentence"}
 Rules for each action:
 - type: only into a text input whose label clearly asks for that field, with "field"
-  set to a name from FIELDS. Never put a value into a box just because the box is
+  set to a name from FIELDS. A label may word it differently: "Applicant name" asks
+  for full_name, and "Household income" asks for annual_income. Never put a value into a box just because the box is
   empty. If no label asks for what you hold, leave the box alone.
-- click: only buttons and links. Use it to move to the next page.
+- click: only buttons and links. Use it to move to the next page. Never click a
+  checkbox or radio button: code asks the applicant about those.
 - upload: on the upload control itself, with "document" set to a name from
   DOCUMENTS. Do not click the upload control. If PAGE TEXT states the file types
   or size allowed for this control, copy those exact words into "rule_text", and

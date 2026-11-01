@@ -54,7 +54,12 @@
     "The portal needs a security check. Open this private link, finish it yourself, then press Done.": "పోర్టల్ కు భద్రతా తనిఖీ అవసరం. ఈ వ్యక్తిగత లింక్‌ను తెరువు, మీరే పూర్తి చేయండి, ఆపై పూర్తయింది నొక్కండి.",
     "Open this private link, check your form and press Submit yourself. It works once, for 10 minutes. Then press Done.": "ఈ ప్రైవేట్ లింక్‌ను తెరవండి, మీ ఫారమ్‌ను తనిఖీ చేసి, మీరే సమర్పించు (Submit) నొక్కండి. ఇది ఒకసారి పనిచేస్తుంది, 10 నిమిషాల వరకు. తర్వాత పూర్తయింది (Done) నొక్కండి.",
     "That link can no longer be used, and no submission was confirmed.": "ఆ లింక్ ఇకపై ఉపయోగించబడదు మరియు ఏ సమర్పణ ధృవీకరించబడలేదు.",
-    "You pressed Submit and the form was sent, but the portal gave no receipt number. Please check the portal. I won't press Submit again.": "మీరు సబ్మిట్ నొక్కారు మరియు ఫారం పంపబడింది, కానీ పోర్టల్ రసీదు నంబర్ ఇవ్వలేదు. దయచేసి పోర్టల్ తనిఖీ చేయండి. నేను మళ్ళీ సబ్మిట్ నొక్కను."
+    "You pressed Submit and the form was sent, but the portal gave no receipt number. Please check the portal. I won't press Submit again.": "మీరు సబ్మిట్ నొక్కారు మరియు ఫారం పంపబడింది, కానీ పోర్టల్ రసీదు నంబర్ ఇవ్వలేదు. దయచేసి పోర్టల్ తనిఖీ చేయండి. నేను మళ్ళీ సబ్మిట్ నొక్కను.",
+    "The form has a box you must tick: “{label}” Shall I tick it for you?": "ఫారమ్‌లో మీరు టిక్ చేయవలసిన ఒక పెట్టె ఉంది: “{label}” నేను మీ కోసం దానిని టిక్ చేయాలా?",
+    "I left the box unticked, so the form can’t be sent. Nothing has been submitted.": "నేను పెట్టెను టిక్ చేయకుండా వదిలేశాను, కాబట్టి ఫారమ్ పంపబడదు. ఏమీ సమర్పించబడలేదు.",
+    "The form asks for “{label}”. Please pick one.": "ఫారమ్ “{label}” కోసం అడుగుతుంది. దయచేసి ఒకటి ఎంచుకోండి.",
+    "Yes, tick it": "సరే, టిక్ చేయండి.",
+    "No, leave it unticked": "లేదు, దాన్ని టిక్ చేయకుండా వదిలేయండి."
   },
   "kn": {
     "I agree": "ನಾನು ಒಪ್ಪುತ್ತೇನೆ",
@@ -111,7 +116,12 @@
     "The portal needs a security check. Open this private link, finish it yourself, then press Done.": "ಪೋರ್ಟಲ್‍ಗೆ ಭದ್ರತಾ ತಪಾಸಣೆ ಅಗತ್ಯವಿದೆ. ಈ ಖಾಸಗಿ ಲಿಂಕ್ ತೆರೆಯಿರಿ, ನೀವೇ ಮುಗಿಸಿ, ನಂತರ ಮುಗಿದಿದೆ (Done) ಒತ್ತಿರಿ.",
     "Open this private link, check your form and press Submit yourself. It works once, for 10 minutes. Then press Done.": "ಈ ಖಾಸಗಿ ಲಿಂಕ್ ತೆರೆಯಿರಿ, ನಿಮ್ಮ ಫಾರ್ಮ್ ಅನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತು ನೀವೇ ಸಲ್ಲಿಸು (Submit) ಗುಂಡಿಯನ್ನು ಒತ್ತಿರಿ. ಇದು ಒಮ್ಮೆ ಕೆಲಸ ಮಾಡುತ್ತದೆ, 10 ನಿಮಿಷಗಳವರೆಗೆ. ನಂತರ ಮುಗಿದಿದೆ (Done) ಗುಂಡಿಯನ್ನು ಒತ್ತಿರಿ.",
     "That link can no longer be used, and no submission was confirmed.": "ಆ ಕೊಂಡಿಯನ್ನು ಇನ್ನು ಮುಂದೆ ಬಳಸಲಾಗುವುದಿಲ್ಲ, ಮತ್ತು ಯಾವುದೇ ಸಲ್ಲಿಕೆಯನ್ನು ದೃಢಪಡಿಸಲಾಗಿಲ್ಲ.",
-    "You pressed Submit and the form was sent, but the portal gave no receipt number. Please check the portal. I won't press Submit again.": "ನೀವು ಸಬ್ಮಿಟ್ ಒತ್ತಿದ್ದೀರಿ ಮತ್ತು ಫಾರ್ಮ್ ಕಳುಹಿಸಲಾಗಿದೆ, ಆದರೆ ಪೋರ್ಟಲ್ ಯಾವುದೇ ರಸೀದಿ ಸಂಖ್ಯೆಯನ್ನು ನೀಡಿಲ್ಲ. ದಯವಿಟ್ಟು ಪೋರ್ಟಲ್ ಅನ್ನು ಪರಿಶೀಲಿಸಿ. ನಾನು ಮತ್ತೆ ಸಬ್ಮಿಟ್ ಒತ್ತುವುದಿಲ್ಲ."
+    "You pressed Submit and the form was sent, but the portal gave no receipt number. Please check the portal. I won't press Submit again.": "ನೀವು ಸಬ್ಮಿಟ್ ಒತ್ತಿದ್ದೀರಿ ಮತ್ತು ಫಾರ್ಮ್ ಕಳುಹಿಸಲಾಗಿದೆ, ಆದರೆ ಪೋರ್ಟಲ್ ಯಾವುದೇ ರಸೀದಿ ಸಂಖ್ಯೆಯನ್ನು ನೀಡಿಲ್ಲ. ದಯವಿಟ್ಟು ಪೋರ್ಟಲ್ ಅನ್ನು ಪರಿಶೀಲಿಸಿ. ನಾನು ಮತ್ತೆ ಸಬ್ಮಿಟ್ ಒತ್ತುವುದಿಲ್ಲ.",
+    "The form has a box you must tick: “{label}” Shall I tick it for you?": "ಫಾರ್ಮ್‌ನಲ್ಲಿ ನೀವು ಗುರುತು ಹಾಕಬೇಕಾದ ಒಂದು ಬಾಕ್ಸ್ ಇದೆ: “{label}” ನಾನು ಅದನ್ನು ನಿಮಗಾಗಿ ಗುರುತು ಹಾಕಬೇಕೆ?",
+    "I left the box unticked, so the form can’t be sent. Nothing has been submitted.": "ನಾನು ಬಾಕ್ಸ್ ಅನ್ನು ಗುರುತು ಹಾಕದೆ ಬಿಟ್ಟೆ, ಆದ್ದರಿಂದ ಫಾರ್ಮ್ ಅನ್ನು ಕಳುಹಿಸಲು ಸಾಧ್ಯವಿಲ್ಲ. ಏನನ್ನೂ ಸಲ್ಲಿಸಲಾಗಿಲ್ಲ.",
+    "The form asks for “{label}”. Please pick one.": "ಫಾರ್ಮ್‌ನಲ್ಲಿ \"{label}\" ಎಂದು ಕೇಳಲಾಗುತ್ತದೆ. ದಯವಿಟ್ಟು ಒಂದನ್ನು ಆಯ್ಕೆಮಾಡಿ.",
+    "Yes, tick it": "ಹೌದು, ಗುರುತು ಹಾಕು.",
+    "No, leave it unticked": "ಬೇಡ, ಗುರುತು ಹಾಕದೆ ಹಾಗೆಯೇ ಬಿಡಿ."
   },
   "ml": {
     "I agree": "ഞാൻ സമ്മതിക്കുന്നു",
@@ -168,7 +178,12 @@
     "The portal needs a security check. Open this private link, finish it yourself, then press Done.": "പോർട്ടലിന് ഒരു സുരക്ഷാ പരിശോധന ആവശ്യമാണ്. ഈ സ്വകാര്യ ലിങ്ക് തുറന്ന്, നിങ്ങൾ തന്നെ പൂർത്തിയാക്കുക, ശേഷം പൂർത്തിയായി എന്ന് അമർത്തുക.",
     "Open this private link, check your form and press Submit yourself. It works once, for 10 minutes. Then press Done.": "ഈ സ്വകാര്യ ലിങ്ക് തുറന്ന് ഫോം പരിശോധിച്ച് സ്വയം സമർപ്പിക്കുക. ഇത് ഒരു തവണ 10 മിനിറ്റ് പ്രവർത്തിക്കും. ശേഷം പൂർത്തിയായി എന്ന് അമർത്തുക.",
     "That link can no longer be used, and no submission was confirmed.": "ആ ലിങ്ക് ഇനി ഉപയോഗിക്കാൻ കഴിയില്ല, ഒരു സമർപ്പണവും സ്ഥിരീകരിച്ചിട്ടില്ല.",
-    "You pressed Submit and the form was sent, but the portal gave no receipt number. Please check the portal. I won't press Submit again.": "നിങ്ങൾ സമർപ്പിച്ചു, ഫോം അയച്ചു, പക്ഷേ പോർട്ടൽ രസീത് നമ്പർ നൽകിയില്ല. ദയവായി പോർട്ടൽ പരിശോധിക്കുക. ഞാൻ ഇനി സമർപ്പിക്കില്ല."
+    "You pressed Submit and the form was sent, but the portal gave no receipt number. Please check the portal. I won't press Submit again.": "നിങ്ങൾ സമർപ്പിച്ചു, ഫോം അയച്ചു, പക്ഷേ പോർട്ടൽ രസീത് നമ്പർ നൽകിയില്ല. ദയവായി പോർട്ടൽ പരിശോധിക്കുക. ഞാൻ ഇനി സമർപ്പിക്കില്ല.",
+    "The form has a box you must tick: “{label}” Shall I tick it for you?": "ഫോമിൽ നിങ്ങൾ ടിക്ക് ചെയ്യേണ്ട ഒരു ബോക്സ് ഉണ്ട്: \"{label}\" ഞാൻ നിങ്ങൾക്കായി അത് ടിക്ക് ചെയ്യണോ?",
+    "I left the box unticked, so the form can’t be sent. Nothing has been submitted.": "ഞാൻ ബോക്സ് ടിക്ക് ചെയ്യാതിരുന്നത് കൊണ്ട് ഫോം അയക്കാൻ കഴിയില്ല. ഒന്നും സമർപ്പിച്ചിട്ടില്ല.",
+    "The form asks for “{label}”. Please pick one.": "ഫോം \"{label}\" ചോദിക്കുന്നു. ദയവായി ഒന്ന് തിരഞ്ഞെടുക്കുക.",
+    "Yes, tick it": "അതെ, ടിക്ക് ചെയ്യുക.",
+    "No, leave it unticked": "വേണ്ട, ടിക്ക് ചെയ്യാതെ വിടുക."
   },
   "bn": {
     "I agree": "আমি সম্মত",
@@ -225,7 +240,12 @@
     "The portal needs a security check. Open this private link, finish it yourself, then press Done.": "পোর্টালে একটি সুরক্ষা পরীক্ষা দরকার। এই ব্যক্তিগত লিঙ্কটি খুলুন, নিজে শেষ করুন, তারপর সম্পন্ন-এ ক্লিক করুন।",
     "Open this private link, check your form and press Submit yourself. It works once, for 10 minutes. Then press Done.": "এই ব্যক্তিগত লিঙ্কটি খুলুন, আপনার ফর্মটি দেখুন এবং নিজে সাবমিট করুন। এটি একবার কাজ করে, 10 মিনিটের জন্য। তারপর সম্পন্ন (Done) তে ক্লিক করুন।",
     "That link can no longer be used, and no submission was confirmed.": "সেই লিঙ্কটি আর ব্যবহার করা যাবে না এবং কোনও জমা নিশ্চিত করা হয়নি।",
-    "You pressed Submit and the form was sent, but the portal gave no receipt number. Please check the portal. I won't press Submit again.": "আপনি সাবমিট বোতাম টিপে ফর্মটি পাঠিয়েছেন, কিন্তু পোর্টালে কোনো রসিদ নম্বর দেওয়া হয়নি। অনুগ্রহ করে পোর্টালে দেখুন। আমি আর সাবমিট বোতাম টিপব না।"
+    "You pressed Submit and the form was sent, but the portal gave no receipt number. Please check the portal. I won't press Submit again.": "আপনি সাবমিট বোতাম টিপে ফর্মটি পাঠিয়েছেন, কিন্তু পোর্টালে কোনো রসিদ নম্বর দেওয়া হয়নি। অনুগ্রহ করে পোর্টালে দেখুন। আমি আর সাবমিট বোতাম টিপব না।",
+    "The form has a box you must tick: “{label}” Shall I tick it for you?": "ফর্মটিতে একটি বাক্স আছে যেখানে আপনাকে টিক দিতে হবে: \"{label}\" আমি কি আপনার জন্য এটি টিক দেব?",
+    "I left the box unticked, so the form can’t be sent. Nothing has been submitted.": "আমি বাক্সটি টিক চিহ্ন দেওয়া ছাড়া রেখে এসেছি, তাই ফর্মটি পাঠানো যাবে না। কিছুই জমা দেওয়া হয়নি।",
+    "The form asks for “{label}”. Please pick one.": "ফর্মটি \"{label}\" চায়। অনুগ্রহ করে একটি বেছে নিন।",
+    "Yes, tick it": "হ্যাঁ, টিক দিন।",
+    "No, leave it unticked": "না, এটা টিক চিহ্ন না দিয়ে ছেড়ে দিন।"
   },
   "mr": {
     "I agree": "मी सहमत आहे",
@@ -282,7 +302,12 @@
     "The portal needs a security check. Open this private link, finish it yourself, then press Done.": "पोर्टलला सुरक्षा तपासणीची आवश्यकता आहे. ही खाजगी लिंक उघडा, ती स्वतः पूर्ण करा, नंतर 'Done' दाबा.",
     "Open this private link, check your form and press Submit yourself. It works once, for 10 minutes. Then press Done.": "ही खाजगी लिंक उघडा, तुमचा फॉर्म तपासा आणि स्वतः सबमिट करा. हे एकदा, 10 मिनिटांसाठी काम करते. मग पूर्ण झाले (Done) दाबा.",
     "That link can no longer be used, and no submission was confirmed.": "ती लिंक आता वापरली जाऊ शकत नाही आणि कोणतेही सबमिशन निश्चित केले गेले नाही.",
-    "You pressed Submit and the form was sent, but the portal gave no receipt number. Please check the portal. I won't press Submit again.": "तुम्ही सबमिट दाबले आणि फॉर्म पाठवला गेला, पण पोर्टलने पावती क्रमांक दिला नाही. कृपया पोर्टल तपासा. मी पुन्हा सबमिट दाबणार नाही."
+    "You pressed Submit and the form was sent, but the portal gave no receipt number. Please check the portal. I won't press Submit again.": "तुम्ही सबमिट दाबले आणि फॉर्म पाठवला गेला, पण पोर्टलने पावती क्रमांक दिला नाही. कृपया पोर्टल तपासा. मी पुन्हा सबमिट दाबणार नाही.",
+    "The form has a box you must tick: “{label}” Shall I tick it for you?": "फॉर्मवर एक बॉक्स आहे ज्यावर तुम्हाला टिक द्यायची आहे: “{label}” मी ते तुमच्यासाठी टिक करू का?",
+    "I left the box unticked, so the form can’t be sent. Nothing has been submitted.": "मी बॉक्स अनटिक् केले, त्यामुळे फॉर्म पाठवला जाऊ शकत नाही. काहीही सबमिट केलेले नाही.",
+    "The form asks for “{label}”. Please pick one.": "फॉर्ममध्ये \"{label}\" विचारले आहे. कृपया एक निवडा.",
+    "Yes, tick it": "होय, खूण करा.",
+    "No, leave it unticked": "नको, ते न निवडलेले तसेच राहू द्या."
   },
   "gu": {
     "I agree": "હા, હું સંમત છું",
@@ -339,7 +364,12 @@
     "The portal needs a security check. Open this private link, finish it yourself, then press Done.": "પોર્ટલને સુરક્ષા તપાસની જરૂર છે. આ ખાનગી લિંક ખોલો, તે જાતે પૂરી કરો, પછી પૂર્ણ થયું પર ક્લિક કરો.",
     "Open this private link, check your form and press Submit yourself. It works once, for 10 minutes. Then press Done.": "આ પ્રાઇવેટ લિંક ખોલો, તમારું ફોર્મ તપાસો અને જાતે સબમિટ કરો. તે એકવાર, 10 મિનિટ માટે કામ કરે છે. પછી ડોન દબાવો.",
     "That link can no longer be used, and no submission was confirmed.": "તે લિંકનો હવે ઉપયોગ કરી શકાતો નથી અને કોઈ સબમિશનની પુષ્ટિ થઈ નથી.",
-    "You pressed Submit and the form was sent, but the portal gave no receipt number. Please check the portal. I won't press Submit again.": "તમે સબમિટ દબાવ્યું અને ફોર્મ મોકલવામાં આવ્યું, પરંતુ પોર્ટલે કોઈ રસીદ નંબર આપ્યો નહીં. કૃપા કરીને પોર્ટલ તપાસો. હું ફરીથી સબમિટ દબાવીશ નહીં."
+    "You pressed Submit and the form was sent, but the portal gave no receipt number. Please check the portal. I won't press Submit again.": "તમે સબમિટ દબાવ્યું અને ફોર્મ મોકલવામાં આવ્યું, પરંતુ પોર્ટલે કોઈ રસીદ નંબર આપ્યો નહીં. કૃપા કરીને પોર્ટલ તપાસો. હું ફરીથી સબમિટ દબાવીશ નહીં.",
+    "The form has a box you must tick: “{label}” Shall I tick it for you?": "ફોર્મમાં એક બોક્સ છે જેને તમારે ટીક કરવાનું છે: “{label}” શું હું તમારા માટે તેને ટીક કરું?",
+    "I left the box unticked, so the form can’t be sent. Nothing has been submitted.": "મેં બોક્સને અનટિક કર્યું, તેથી ફોર્મ મોકલી શકાશે નહીં. કંઈપણ સબમિટ કરવામાં આવ્યું નથી.",
+    "The form asks for “{label}”. Please pick one.": "ફોર્મમાં \"{label}\" પૂછવામાં આવે છે. કૃપા કરીને એક પસંદ કરો.",
+    "Yes, tick it": "હા, ટીક કરો.",
+    "No, leave it unticked": "ના, તેને અનટિક કરેલું રહેવા દો."
   },
   "pa": {
     "I agree": "ਮੈਂ ਸਹਿਮਤ ਹਾਂ",
@@ -396,7 +426,12 @@
     "The portal needs a security check. Open this private link, finish it yourself, then press Done.": "ਪੋਰਟਲ ਨੂੰ ਸੁਰੱਖਿਆ ਜਾਂਚ ਦੀ ਲੋੜ ਹੈ। ਇਹ ਨਿੱਜੀ ਲਿੰਕ ਖੋਲ੍ਹੋ, ਇਸਨੂੰ ਖੁਦ ਪੂਰਾ ਕਰੋ, ਫਿਰ 'ਹੋ ਗਿਆ' ਦਬਾਓ।",
     "Open this private link, check your form and press Submit yourself. It works once, for 10 minutes. Then press Done.": "ਇਹ ਨਿੱਜੀ ਲਿੰਕ ਖੋਲ੍ਹੋ, ਆਪਣਾ ਫਾਰਮ ਚੈੱਕ ਕਰੋ ਅਤੇ ਖੁਦ ਸਬਮਿਟ ਕਰੋ। ਇਹ ਇੱਕ ਵਾਰ, 10 ਮਿੰਟਾਂ ਲਈ ਕੰਮ ਕਰਦਾ ਹੈ। ਫਿਰ ਡਨ ਦਬਾਓ।",
     "That link can no longer be used, and no submission was confirmed.": "ਉਸ ਲਿੰਕ ਨੂੰ ਹੁਣ ਨਹੀਂ ਵਰਤਿਆ ਜਾ ਸਕਦਾ ਹੈ, ਅਤੇ ਕਿਸੇ ਵੀ ਸਬਮਿਸ਼ਨ ਦੀ ਪੁਸ਼ਟੀ ਨਹੀਂ ਕੀਤੀ ਗਈ ਸੀ।",
-    "You pressed Submit and the form was sent, but the portal gave no receipt number. Please check the portal. I won't press Submit again.": "ਤੁਸੀਂ ਸਬਮਿਟ ਦਬਾਇਆ ਅਤੇ ਫਾਰਮ ਭੇਜ ਦਿੱਤਾ ਗਿਆ, ਪਰ ਪੋਰਟਲ ਨੇ ਕੋਈ ਰਸੀਦ ਨੰਬਰ ਨਹੀਂ ਦਿੱਤਾ। ਕਿਰਪਾ ਕਰਕੇ ਪੋਰਟਲ ਦੀ ਜਾਂਚ ਕਰੋ। ਮੈਂ ਦੁਬਾਰਾ ਸਬਮਿਟ ਨਹੀਂ ਦਬਾਵਾਂਗੀ।"
+    "You pressed Submit and the form was sent, but the portal gave no receipt number. Please check the portal. I won't press Submit again.": "ਤੁਸੀਂ ਸਬਮਿਟ ਦਬਾਇਆ ਅਤੇ ਫਾਰਮ ਭੇਜ ਦਿੱਤਾ ਗਿਆ, ਪਰ ਪੋਰਟਲ ਨੇ ਕੋਈ ਰਸੀਦ ਨੰਬਰ ਨਹੀਂ ਦਿੱਤਾ। ਕਿਰਪਾ ਕਰਕੇ ਪੋਰਟਲ ਦੀ ਜਾਂਚ ਕਰੋ। ਮੈਂ ਦੁਬਾਰਾ ਸਬਮਿਟ ਨਹੀਂ ਦਬਾਵਾਂਗੀ।",
+    "The form has a box you must tick: “{label}” Shall I tick it for you?": "ਫਾਰਮ ਵਿੱਚ ਇੱਕ ਬਾਕਸ ਹੈ ਜਿਸਨੂੰ ਤੁਹਾਨੂੰ ਨਿਸ਼ਾਨ ਲਗਾਉਣਾ ਚਾਹੀਦਾ ਹੈ: “{label}” ਕੀ ਮੈਂ ਤੁਹਾਡੇ ਲਈ ਇਸਨੂੰ ਨਿਸ਼ਾਨ ਲਗਾ ਦੇਵਾਂ?",
+    "I left the box unticked, so the form can’t be sent. Nothing has been submitted.": "ਮੈਂ ਬਾਕਸ ਨੂੰ ਅਣ-ਟਿੱਕ ਕੀਤਾ ਛੱਡ ਦਿੱਤਾ, ਇਸ ਲਈ ਫਾਰਮ ਨਹੀਂ ਭੇਜਿਆ ਜਾ ਸਕਦਾ। ਕੁਝ ਵੀ ਜਮ੍ਹਾਂ ਨਹੀਂ ਕੀਤਾ ਗਿਆ ਹੈ।",
+    "The form asks for “{label}”. Please pick one.": "ਫਾਰਮ ਵਿੱਚ \"{label}\" ਮੰਗਿਆ ਗਿਆ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਇੱਕ ਚੁਣੋ।",
+    "Yes, tick it": "ਹਾਂ, ਇਸ 'ਤੇ ਨਿਸ਼ਾਨ ਲਗਾਓ।",
+    "No, leave it unticked": "ਨਹੀਂ, ਇਸਨੂੰ ਅਣ-ਟਿੱਕ ਛੱਡ ਦਿਓ।"
   },
   "or": {
     "I agree": "ମୁଁ ସହମତ",
@@ -453,7 +488,12 @@
     "The portal needs a security check. Open this private link, finish it yourself, then press Done.": "ପୋର୍ଟାଲକୁ ସୁରକ୍ଷା ଯାଞ୍ଚ ଦରକାର। ଏହି ବ୍ୟକ୍ତିଗତ ଲିଙ୍କ ଖୋଲନ୍ତୁ, ନିଜେ ସମ୍ପୂର୍ଣ୍ଣ କରନ୍ତୁ, ତାପରେ Done ଦବାନ୍ତୁ।",
     "Open this private link, check your form and press Submit yourself. It works once, for 10 minutes. Then press Done.": "ଏହି ବ୍ୟକ୍ତିଗତ ଲିଙ୍କ ଖୋଲନ୍ତୁ, ଆପଣଙ୍କ ଫର୍ମ ଯାଞ୍ଚ କରନ୍ତୁ ଏବଂ ନିଜେ Submit ଦବାନ୍ତୁ। ଏହା ଥରେ, 10 ମିନିଟ ପାଇଁ କାମ କରିବ। ତାପରେ Done ଦବାନ୍ତୁ।",
     "That link can no longer be used, and no submission was confirmed.": "ସେହି ଲିଙ୍କ ଆଉ ବ୍ୟବହାର ହୋଇପାରିବ ନାହିଁ, ଏବଂ ଦାଖଲ ନିଶ୍ଚିତ ହୋଇନାହିଁ।",
-    "You pressed Submit and the form was sent, but the portal gave no receipt number. Please check the portal. I won't press Submit again.": "ଆପଣ Submit ଦବାଇଲେ ଏବଂ ଫର୍ମ ପଠାଗଲା, କିନ୍ତୁ ପୋର୍ଟାଲ ରସିଦ ନମ୍ବର ଦେଲା ନାହିଁ। ଦୟାକରି ପୋର୍ଟାଲ ଯାଞ୍ଚ କରନ୍ତୁ। ମୁଁ ପୁଣି Submit ଦବାଇବି ନାହିଁ।"
+    "You pressed Submit and the form was sent, but the portal gave no receipt number. Please check the portal. I won't press Submit again.": "ଆପଣ Submit ଦବାଇଲେ ଏବଂ ଫର୍ମ ପଠାଗଲା, କିନ୍ତୁ ପୋର୍ଟାଲ ରସିଦ ନମ୍ବର ଦେଲା ନାହିଁ। ଦୟାକରି ପୋର୍ଟାଲ ଯାଞ୍ଚ କରନ୍ତୁ। ମୁଁ ପୁଣି Submit ଦବାଇବି ନାହିଁ।",
+    "The form has a box you must tick: “{label}” Shall I tick it for you?": "ଫର୍ମରେ ଏକ ବାକ୍ସ ଅଛି ଯାହାକୁ ତୁମେ ଟିକ୍ କରିବା ଆବଶ୍ୟକ: “{label}” ମୁଁ ତୁମ ପାଇଁ ଏହାକୁ ଟିକ୍ କରିବି କି?",
+    "I left the box unticked, so the form can’t be sent. Nothing has been submitted.": "ମୁଁ ବାକ୍ସକୁ ଅଣ-ଟିକ୍ କରିଦେଲି, ତେଣୁ ଫର୍ମ ପଠାଯାଇପାରିବ ନାହିଁ। କିଛି ଦାଖଲ କରାଯାଇନାହିଁ।",
+    "The form asks for “{label}”. Please pick one.": "ଫର୍ମଟି \"{label}\" ମାଗୁଛି। ଦୟାକରି ଗୋଟିଏ ବାଛନ୍ତୁ।",
+    "Yes, tick it": "ହଁ, ଏହାକୁ ଚିହ୍ନିତ କରନ୍ତୁ।",
+    "No, leave it unticked": "ନା, ଏହାକୁ ଚିହ୍ନିତ ନକରି ଛାଡ଼ିଦିଅନ୍ତୁ।"
   },
   "ur": {
     "I agree": "میں متفق ہوں",
@@ -510,6 +550,11 @@
     "The portal needs a security check. Open this private link, finish it yourself, then press Done.": "پورٹل کو سیکیورٹی چیک کی ضرورت ہے۔ یہ پرائیویٹ لنک کھولیں، اسے خود ختم کریں، پھر ڈن دبائیں۔",
     "Open this private link, check your form and press Submit yourself. It works once, for 10 minutes. Then press Done.": "یہ پرائیویٹ لنک کھولیں، اپنا فارم چیک کریں اور خود جمع کرائیں (Submit) پر کلک کریں۔ یہ ایک بار، 10 منٹ کے لیے کام کرتا ہے۔ پھر فارغ ہو گیا (Done) پر کلک کریں۔",
     "That link can no longer be used, and no submission was confirmed.": "وہ لنک اب استعمال نہیں کیا جا سکتا، اور کسی بھی جمع کرانے کی تصدیق نہیں ہوئی۔",
-    "You pressed Submit and the form was sent, but the portal gave no receipt number. Please check the portal. I won't press Submit again.": "آپ نے جمع کرائیں اور فارم بھیج دیا گیا، لیکن پورٹل نے کوئی رسید نمبر نہیں دیا۔ براہ کرم پورٹل چیک کریں۔ میں دوبارہ جمع کرائیں نہیں دوں گی۔"
+    "You pressed Submit and the form was sent, but the portal gave no receipt number. Please check the portal. I won't press Submit again.": "آپ نے جمع کرائیں اور فارم بھیج دیا گیا، لیکن پورٹل نے کوئی رسید نمبر نہیں دیا۔ براہ کرم پورٹل چیک کریں۔ میں دوبارہ جمع کرائیں نہیں دوں گی۔",
+    "The form has a box you must tick: “{label}” Shall I tick it for you?": "فارم میں ایک باکس ہے جس پر آپ کو نشان لگانا ہے: \"{label}\" کیا میں آپ کے لیے اس پر نشان لگا دوں؟",
+    "I left the box unticked, so the form can’t be sent. Nothing has been submitted.": "میں نے باکس کو غیر نشان زد چھوڑ دیا، اس لیے فارم نہیں بھیجا جا سکتا۔ کچھ بھی جمع نہیں کیا گیا ہے۔",
+    "The form asks for “{label}”. Please pick one.": "فارم میں \"{label}\" درج کرنے کو کہا گیا ہے۔ براہ کرم ایک منتخب کریں۔",
+    "Yes, tick it": "جی ہاں، نشان لگائیں۔",
+    "No, leave it unticked": "نہیں، اسے غیر نشان زد رہنے دیں۔"
   }
 }

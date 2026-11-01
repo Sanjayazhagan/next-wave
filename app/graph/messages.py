@@ -84,7 +84,12 @@ FIELD_LABELS = {
     "authenticity": "Certificate check",
     "valid_until": "Expiry date",
 }
-SUBMIT_LINK_ENDED = "That link can no longer be used, and no submission was confirmed."
+CONSENT_BOX = "The form has a box you must tick: “{label}” Shall I tick it for you?"
+CONSENT_DECLINED = (
+    "I left the box unticked, so the form can’t be sent. Nothing has been submitted."
+)
+CHOOSE_OPTION = "The form asks for “{label}”. Please pick one."
+SUBMIT_LINK_ENDED ="That link can no longer be used, and no submission was confirmed."
 CAPTCHA = "The portal is showing this security image. Please reply with the text in it."
 OTP = "The portal sent an OTP to your phone. Please reply with it."
 HANDOVER = "I'm having trouble with this step, so a helper will take over. You don't need to do anything."

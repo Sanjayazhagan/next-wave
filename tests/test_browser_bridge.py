@@ -166,3 +166,23 @@ async def test_unreachable_service_is_a_browser_error(make_settings) -> None:
 async def test_close_ends_the_session(worker: BridgeBrowserWorker, service: FakeBridge) -> None:
     await worker.close("s1")
     assert service.deleted
+
+
+async def test_a_verified_click_carries_its_proof(
+    worker: BridgeBrowserWorker, service: FakeBridge
+) -> None:
+    click = Action(
+        type="click", target=Target(role="checkbox", name="I agree"),
+        verified=True, source_ref="user:consent:s1",
+    )
+    assert (await worker.act("s1", click)).ok
+    assert service.actions[-1]["verified"] is True
+    assert service.actions[-1]["source_ref"] == "user:consent:s1"
+
+
+async def test_an_ordinary_action_carries_no_proof(
+    worker: BridgeBrowserWorker, service: FakeBridge
+) -> None:
+    await worker.act("s1", Action(type="click", target=Target(role="button", name="Next")))
+    assert "verified" not in service.actions[-1]
+    assert "source_ref" not in service.actions[-1]

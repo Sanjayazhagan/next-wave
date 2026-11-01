@@ -31,12 +31,23 @@ class FileRules(BaseModel):
     height: int | None = None
 
 
+class NodeOption(BaseModel):
+    """One choice in a drop-down."""
+
+    value: str
+    label: str = ""
+    disabled: bool = False
+
+
 class PageNode(BaseModel):
     ref: str
     role: str
     name: str
     value: str = ""
     file_rules: FileRules | None = None  # On role "file": what this control states.
+    checked: bool = False  # On a checkbox: whether it is ticked.
+    required: bool = False
+    options: list[NodeOption] = []  # On a drop-down: what it offers.
 
 
 class Challenge(BaseModel):
@@ -84,6 +95,8 @@ class Action(BaseModel):
     file_name: str | None = None
     file_mime: str | None = None
     wait_ms: int | None = None
+    verified: bool | None = None  # True only for a box the user said yes to in chat.
+    source_ref: str | None = None  # Where that yes came from.
 
 
 class ActionResult(BaseModel):

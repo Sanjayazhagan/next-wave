@@ -19,6 +19,7 @@ from app.config import Settings
 from app.documents import DocumentError, combine, file_name, fit_document
 from app.events import EventLog
 from app.graph import messages
+from app.graph.choices import match_option, pending_choice, pending_consent, usable
 from app.graph.state import AgentState
 from app.llm import LlmError
 from app.planner import Planner, PlanError
@@ -31,7 +32,7 @@ from app.vault import FileStore, Vault
 from common.corrections import normalize as normalize_value
 from common.corrections import parse_draft_edit
 from common.textnorm import one_amount
-from contracts.browser import Action, Snapshot
+from contracts.browser import Action, NodeOption, PageNode, Snapshot
 from contracts.doctor import DoctorRequest, DoctorResponse
 from contracts.documents import DocumentImage, ExtractedDocument, ExtractionResult
 from contracts.eligibility import EligibilityRequest, EligibilityResponse
@@ -541,10 +542,16 @@ class Nodes:
 
         self._emit(state, "browser_step", planned.intent or planned.action, planned.reasoning)
         if planned.action == "review":
-            return {"route": "reached_review"}
-        if planned.action == "ask":
-            return {"route": "ask_field", "missing_field": planned.field}
+            return self._pending_input(snapshot) or {"route": "reached_review"}
         node = next((n for n in snapshot.nodes if n.ref == planned.ref), None)
+        if planned.action == "ask":
+            if node is not None and usable(node.options):
+                return self._choice_route(planned.field, node)
+            return {"route": "ask_field", "missing_field": planned.field}
+        if planned.action == "click" and node is not None and node.role == "checkbox":
+            return self._consent_route(node)
+        if planned.action == "click" and node is not None and usable(node.options):
+            return self._choice_route(planned.field, node)  # A drop-down is picked, not clicked.
         target = {"role": node.role, "name": node.name} if node else None
         step = SkillStep(
             intent=planned.intent or planned.action,
@@ -562,7 +569,7 @@ class Nodes:
     async def _replay_step(self, state: AgentState, snapshot: Snapshot) -> dict[str, Any]:
         steps, index = state["steps"], state["step_index"]
         if index >= len(steps):
-            return {"route": "reached_review"}
+            return self._pending_input(snapshot) or {"route": "reached_review"}
         step = SkillStep.model_validate(steps[index])
         repaired: dict[str, Any] = {}
         if step.target and snapshot.find(step.target) is None:
@@ -591,16 +598,26 @@ class Nodes:
         filled: dict[str, Any] = {}
         if step.action == "type":
             field = profile_of(state).fields.get(step.field or "")
-            if field is None:
+            node = snapshot.find(step.target) if step.target else None
+            if node is not None and usable(node.options):
+                # A drop-down only takes one of its own options, so the user picks unless
+                # a stored answer plainly names one.
+                option = match_option(node.options, field.value) if field else None
+                if option is None:
+                    return self._choice_route(step.field, node)
+                action.value = option.value
+            elif field is None:
                 return {"route": "ask_field", "missing_field": step.field}
-            action.value = field.value
-            filled = {
-                step.field: {
-                    "label": step.target.name if step.target else step.field,
-                    "source_document": field.source_document,
-                    "confidence": field.confidence,
+            else:
+                action.value = field.value
+            if field is not None:
+                filled = {
+                    step.field: {
+                        "label": step.target.name if step.target else step.field,
+                        "source_document": field.source_document,
+                        "confidence": field.confidence,
+                    }
                 }
-            }
         elif step.action == "upload":
             try:
                 await self._attach_document(state, step, action, snapshot)
@@ -746,6 +763,117 @@ class Nodes:
             }
         # Possibly submitted: never offer a second click.
         return {**self._handover(messages.SUBMIT_UNCERTAIN), "link": None}
+
+    @staticmethod
+    def _choice_route(field: str | None, node: PageNode) -> dict[str, Any]:
+        options = [
+            {"value": option.value, "label": option.label or option.value}
+            for option in usable(node.options)
+        ]
+        return {
+            "route": "form_choice",
+            "form_choice": {
+                "field": field or re.sub(r"\W+", "_", node.name.lower()).strip("_") or "choice",
+                "label": node.name,
+                "target": {"role": node.role, "name": node.name},
+                "options": options,
+            },
+        }
+
+    @staticmethod
+    def _consent_route(node: PageNode) -> dict[str, Any]:
+        return {
+            "route": "form_consent",
+            "form_consent": {
+                "label": node.name,
+                "target": {"role": node.role, "name": node.name},
+            },
+        }
+
+    def _pending_input(self, snapshot: Snapshot) -> dict[str, Any] | None:
+        """What only the user can settle before review: an unpicked drop-down, an unticked box."""
+        choice = pending_choice(snapshot)
+        if choice is not None:
+            return self._choice_route(None, choice)
+        box = pending_consent(snapshot)
+        return self._consent_route(box) if box else None
+
+    async def ask_form_choice(self, state: AgentState) -> dict[str, Any]:
+        """The form is a drop-down and the answer is not on file, so the user picks."""
+        choice = state["form_choice"]
+        options = [NodeOption(**option) for option in choice["options"]]
+        reply = ask(
+            "form_choice",
+            messages.CHOOSE_OPTION.format(label=choice["label"]),
+            {option.value: option.label or option.value for option in options},
+        )
+        picked = next((o for o in options if o.value == chosen(reply)), None)
+        picked = picked or match_option(options, typed(reply))
+        if picked is None:
+            return {}  # Not one of the options: ask again.
+        action = Action(type="type", target=choice["target"], value=picked.value)
+        try:
+            result = await self.d.browser.act(state["browser_session"], action)
+        except BrowserSessionLost:
+            return self._strike(state, "Browser session lost", retry_route="reopen")
+        except BrowserError as exc:
+            return self._strike(state, str(exc))
+        if not result.ok:
+            return self._strike(state, result.error or "The choice could not be made")
+        field = f"{choice['field']}_option"
+        update: dict[str, Any] = {
+            "route": "again",
+            "strikes": 0,
+            "form_choice": None,
+            "profile": with_answer(state, field, picked.label or picked.value, "user_answer"),
+            "filled": {
+                **state.get("filled", {}),
+                field: {"label": choice["label"], "source_document": "user_answer", "confidence": 1.0},
+            },
+        }
+        if state.get("mode") == "replay":
+            update["step_index"] = state.get("step_index", 0) + 1
+        else:
+            step = SkillStep(
+                intent=f"Choose {choice['label']}", action="type",
+                target=choice["target"], field=choice["field"],
+            )
+            update["trace"] = [*state.get("trace", []), step.model_dump()]
+        return update
+
+    async def ask_form_consent(self, state: AgentState) -> dict[str, Any]:
+        """A declaration box is the user's to tick: the agent asks first and never assumes."""
+        consent = state["form_consent"]
+        reply = ask(
+            "form_consent",
+            messages.CONSENT_BOX.format(label=consent["label"]),
+            {"yes": "Yes, tick it", "no": "No, leave it unticked"},
+        )
+        answer = chosen(reply) or typed(reply).lower()
+        if answer == "no" or answer in NO_WORDS:
+            return {
+                "route": "stop",
+                "outcome": "declined",
+                "form_consent": None,
+                "final": {"text": messages.CONSENT_DECLINED},
+            }
+        if answer != "yes" and answer not in YES_WORDS:
+            return {}  # Neither yes nor no: ask again.
+        action = Action(
+            type="click",
+            target=consent["target"],
+            verified=True,
+            source_ref=f"user:consent:{state['session_id']}",
+        )
+        try:
+            result = await self.d.browser.act(state["browser_session"], action)
+        except BrowserSessionLost:
+            return self._strike(state, "Browser session lost", retry_route="reopen")
+        except BrowserError as exc:
+            return self._strike(state, str(exc))
+        if not result.ok:
+            return self._strike(state, result.error or "The box could not be ticked")
+        return {"route": "again", "strikes": 0, "form_consent": None}
 
     async def ask_field(self, state: AgentState) -> dict[str, Any]:
         # A fixed sentence, so a hostile page cannot word the question via the model.

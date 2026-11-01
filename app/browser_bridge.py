@@ -12,7 +12,7 @@ import httpx
 from app.browser import BrowserError, BrowserSessionLost
 from app.config import Settings
 from app.documents import JPEG, PDF, PNG, parse_rules
-from contracts.browser import Action, ActionResult, FileRules, PageNode, Snapshot
+from contracts.browser import Action, ActionResult, FileRules, NodeOption, PageNode, Snapshot
 
 TIMEOUT_SECONDS = 60
 CONSENT_REF = "agent-consent"
@@ -32,6 +32,17 @@ def node_of(element: dict[str, Any]) -> PageNode:
         name=element["name"],
         value=element.get("value", ""),
         file_rules=parse_rules(words, element.get("accept", "")) if is_file else None,
+        checked=bool(element.get("checked", False)),
+        required=bool(element.get("required", False)),
+        options=[
+            NodeOption(
+                value=str(option.get("value", "")),
+                label=str(option.get("label", "")),
+                disabled=bool(option.get("disabled", False)),
+            )
+            for option in element.get("options") or []
+            if isinstance(option, dict)
+        ],
     )
 
 
