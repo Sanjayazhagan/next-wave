@@ -58,3 +58,7 @@ from common.textnorm import one_amount  # noqa: E402
 ])
 def test_one_amount(text, expected):
     assert one_amount(text) == expected
+
+
+def test_norm_text_keeps_tamil_and_hindi_vowel_signs():
+    assert norm_text("ஆண்") == "ஆண்" and norm_text("பெண்!") == "பெண்" and norm_text("लड़की") == "लड़की"
