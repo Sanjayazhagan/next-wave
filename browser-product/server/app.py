@@ -101,6 +101,8 @@ from server.browser_v2 import router as browser_v2_router
 app.include_router(browser_v2_router)
 from server.core_gateway import router as core_gateway_router
 app.include_router(core_gateway_router)
+from server.core_assist import router as core_assist_router
+app.include_router(core_assist_router)
 from server.browser_lab import router as browser_lab_router
 app.include_router(browser_lab_router)
 from server.conversation_bridge import router as conversation_router
@@ -159,7 +161,7 @@ async def human_task_guard(request, call_next):
         if lease:
             with conn() as db:
                 db.execute('DELETE FROM execution_leases WHERE token=?', (lease,))
-    if request.url.path.startswith(('/assist', '/integration/','/api/','/auth/')):
+    if request.url.path.startswith(('/assist', '/core-assist', '/core-browser/', '/integration/','/api/','/auth/')):
         response.headers['Cache-Control'] = 'no-store'
         response.headers['Referrer-Policy'] = 'no-referrer'
         response.headers['X-Content-Type-Options'] = 'nosniff'
@@ -227,7 +229,7 @@ def audit(sid,typ,summary,data=None):
         c.commit()
 
 async def worker(method,path,payload=None,timeout=20):
-    async with httpx.AsyncClient(timeout=timeout, headers={'X-Internal-Key':KEY}) as client:
+    async with httpx.AsyncClient(timeout=timeout, trust_env=False, headers={'X-Internal-Key':KEY}) as client:
         try:
             res = await client.request(method,WORKER+path,json=payload)
         except httpx.ConnectError:
@@ -237,7 +239,7 @@ async def worker(method,path,payload=None,timeout=20):
         if res.status_code >= 400:
             try: detail=res.json().get('detail','Browser action failed')
             except Exception: detail='Browser action failed'
-            raise HTTPException(res.status_code,str(detail)[:180])
+            raise HTTPException(res.status_code,str(detail)[:180],headers={**({'X-Browser-Outcome':res.headers['x-browser-outcome']} if res.headers.get('x-browser-outcome') in ('not_applied','unknown') else {}),**({'Retry-After':str(min(60,max(0,int(res.headers['retry-after']))))} if res.headers.get('retry-after','').isdigit() else {})})
         return res.json()
 
 def public(r):

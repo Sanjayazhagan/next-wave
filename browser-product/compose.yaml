@@ -7,8 +7,10 @@ services:
     ports:
       - "127.0.0.1:8100:8000"
     environment:
+      DEMO_HOST: ${DEMO_HOST:-}
       APP_MODE: ${APP_MODE:-demo}
       MOCK_BASE_URL: http://api:8000
+      FORWARDED_ALLOW_IPS: ${TRUSTED_PROXY_IPS:-127.0.0.1}
       WORKER_URL: http://worker:8101
       DATABASE_PATH: /app/data/demo.db
       INTERNAL_KEY: ${INTERNAL_KEY:-demo-worker-key-change-before-production}

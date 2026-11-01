@@ -67,7 +67,7 @@ def enforce(request):
     if os.getenv('SECURITY_MODE', 'local-demo') != 'signed':
         return None
     path = request.url.path
-    if path.startswith(('/health', '/ready', '/mock/', '/browser-lab/','/assist/', '/assist-config', '/assist.js', '/assist.css', '/app.js', '/app.css','/browser-workbench')) or path == '/':
+    if path.startswith(('/health', '/ready', '/mock/', '/browser-lab/','/assist/', '/core-assist/', '/core-assist.js', '/core-assist.css', '/assist-config', '/assist.js', '/assist.css', '/app.js', '/app.css','/browser-workbench')) or path == '/':
         return None
     if path.startswith(('/integration/', '/core-browser/')):
         # Integration endpoints independently require the service key.

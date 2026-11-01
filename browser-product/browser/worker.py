@@ -43,7 +43,10 @@ async def reap_idle():
             if context.last_used<cutoff and not context.lock.locked():
                 async with context.lock:
                     if context.last_used<cutoff:
-                        contexts.pop(ident,None);await context.context.close()
+                        contexts.pop(ident,None);context.private_values.clear();await context.context.close()
+                        from browser.core_compat import bridges
+                        for bridge_id,info in list(bridges.items()):
+                            if info.context_id==ident:bridges.pop(bridge_id,None)
         for sid, session in list(sessions.items()):
             if session.last_used < cutoff and not session.lock.locked():
                 async with session.lock:
@@ -82,7 +85,8 @@ async def lifespan(app):
             await s.context.close()
         sessions.clear()
         from browser.general_routes import contexts
-        for context in list(contexts.values()):await context.context.close()
+        for context in list(contexts.values()):
+            context.private_values.clear();await context.context.close()
         contexts.clear()
         await browser.close()
         await p.stop()

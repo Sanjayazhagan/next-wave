@@ -61,6 +61,9 @@ def model_input(goal:str,observation:dict)->dict:
         'Request missing information; fill only verified values with source references.',
         'Pause for authentication, OTP, CAPTCHA, device authentication and final review. Never bypass these controls.',
         'You cannot authorize final submission; use the portal adapter and exact citizen approval flow.',
+        'For comboboxes/autocomplete, fill then observe and choose the requested observed option; typed text alone may not select a value.',
+        'Inspect interaction_state overlays and their scoped controls. Do not click obscured background elements or infer consent.',
+        'On session expiry reopen explicitly and request reauthentication. Reconcile uncertain writes; never repeat submission with a fresh action ID.',
         'After every action inspect the returned observation. On stale targets request a new observation instead of guessing.'
     ],'observation':filtered,'decision_schema':ModelDecision.model_json_schema()}
 

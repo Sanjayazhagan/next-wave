@@ -19,7 +19,7 @@ def check(key):
 
 async def pass_through(method,path,payload=None):
     from server.app import worker
-    return await worker(method,'/core'+path,payload,timeout=35)
+    return await worker(method,'/core'+path,payload,timeout=45)
 
 @router.post('/session')
 async def open_session(req:Payload,x_internal_key:str|None=Header(None)):
@@ -32,9 +32,10 @@ async def login(sid:str,req:Payload,x_internal_key:str|None=Header(None)):
     return await pass_through('POST',f'/session/{sid}/login',req.model_dump())
 
 @router.get('/session/{sid}/snapshot')
-async def snapshot(sid:str,x_internal_key:str|None=Header(None)):
+async def snapshot(sid:str,x_internal_key:str|None=Header(None),link_offset:int=0,link_query:str=''):
     check(x_internal_key)
-    return await pass_through('GET',f'/session/{sid}/snapshot')
+    from urllib.parse import urlencode
+    return await pass_through('GET',f'/session/{sid}/snapshot?'+urlencode({'link_offset':link_offset,'link_query':link_query}))
 
 @router.post('/session/{sid}/action')
 async def action(sid:str,req:Payload,x_internal_key:str|None=Header(None)):

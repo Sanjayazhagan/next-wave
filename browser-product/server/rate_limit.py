@@ -8,10 +8,10 @@ class RateLimit:
     def __init__(self,app):self.app=app
     async def __call__(self,scope,receive,send):
         path=scope.get('path','')
-        if scope['type']!='http' or not path.startswith(('/api/','/auth/','/assist-api/','/integration/')):
+        if scope['type']!='http' or not path.startswith(('/api/','/auth/','/assist-api/','/integration/','/core-assist/','/core-browser/')):
             return await self.app(scope,receive,send)
         from server import app
-        family='auth' if path.startswith('/auth/') or path.endswith('/claim') else ('core' if path.startswith('/integration/') else 'citizen')
+        family='auth' if path.startswith('/auth/') or path.endswith('/claim') else ('core' if path.startswith(('/integration/','/core-browser/')) else 'citizen')
         budget={'auth':30,'core':600,'citizen':360}[family]
         client=(scope.get('client') or ('unknown',0))[0]
         fingerprint=hashlib.sha256((app.SIGN_KEY+family+str(client)).encode()).hexdigest()

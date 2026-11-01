@@ -23,3 +23,8 @@ from server.conversation_bridge import Interrupt,CitizenReply,Question,DeliveryC
 for name,model in [('conversation-interrupt',Interrupt),('citizen-reply',CitizenReply),('citizen-question',Question),('delivery-claim',DeliveryClaim),('delivery-ack',DeliveryAck),('conversation-notification',Notification)]:
     (out2/(name+'.schema.json')).write_text(json.dumps(model.model_json_schema(),indent=2)+'\n',encoding='utf-8')
 print('Exported core conversation transport contracts')
+
+from browser.core_compat import CoreAction,Open,HumanAction
+core_out=root/'contracts'/'core-browser';core_out.mkdir(exist_ok=True)
+for name,model in [('action',CoreAction),('open',Open),('human-action',HumanAction)]:
+    (core_out/(name+'.schema.json')).write_text(json.dumps(model.model_json_schema(),indent=2)+'\n',encoding='utf-8')
