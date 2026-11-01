@@ -28,6 +28,8 @@ from app.sessions import SessionStore
 from app.skills import SkillStep, SkillStore
 from app.states import indian_state
 from app.vault import FileStore, Vault
+from common.corrections import normalize as normalize_value
+from common.corrections import parse_draft_edit
 from contracts.browser import Action, Snapshot
 from contracts.doctor import DoctorRequest, DoctorResponse
 from contracts.documents import DocumentImage, ExtractedDocument, ExtractionResult
@@ -754,16 +756,20 @@ class Nodes:
         text = messages.EDIT
         if state.get("edit_error"):
             text = f"{messages.EDIT_INVALID} {text}"
-        match = re.fullmatch(r"(\d+)[\s.:)-]+(.+)", typed(ask("edit", text)), re.DOTALL)
-        fields = list(state.get("filled", {}))
-        if match is None or not 1 <= int(match[1]) <= len(fields):
+        # Read in code, never by the AI: "2 120000", "income 2 lakh", "change dob to 15/08/2005".
+        parsed = parse_draft_edit(typed(ask("edit", text)), state.get("filled", {}))
+        if parsed is None:
             return {"edit_error": "invalid"}
-        field = fields[int(match[1]) - 1]
+        field, raw = parsed
+        question = next((q for q in messages.QUESTIONS if q.field == field), None)
+        value = clean_answer(question, raw, strict=True) if question else normalize_value(field, raw)
+        if not value:
+            return {"edit_error": "invalid"}
         return {
             "edit_error": None,
             "review_choice": None,
             "strikes": 0,
-            "profile": with_answer(state, field, match[2].strip(), "user_edit"),
+            "profile": with_answer(state, field, value, "user_edit"),
         }
 
     async def submit(self, state: AgentState) -> dict[str, Any]:
