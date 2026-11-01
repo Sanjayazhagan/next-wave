@@ -1,18 +1,17 @@
 """One caller-requested bridge step; core supplies decisions and citizen replies."""
 import httpx
 import uuid
+from clients.reliability import request_with_backoff,not_applied
 
 class CoreBrowserClient:
     def __init__(self, base_url, service_key, *, transport=None):
         self.pending_actions={}
         self.http=httpx.AsyncClient(base_url=base_url.rstrip('/')+'/core-browser/',
-            headers={'X-Internal-Key':service_key},timeout=45,transport=transport)
+            headers={'X-Internal-Key':service_key},timeout=60,transport=transport)
     async def __aenter__(self):return self
     async def __aexit__(self,*args):await self.http.aclose()
     async def request(self,method,path,body=None):
-        response=await self.http.request(method,path,json=body)
-        response.raise_for_status()
-        return response.json()
+        return await request_with_backoff(self.http,method,path,body)
     async def open_url(self,url,consent_ref):
         if not url or not consent_ref:raise ValueError('Explicit URL and citizen consent required')
         return await self.request('POST','session',{'url':url,'consent_ref':consent_ref})
@@ -34,6 +33,10 @@ class CoreBrowserClient:
         if not 0<=max_replans<=3:raise ValueError('max_replans must be between 0 and 3')
         for attempt in range(max_replans+1):
             snapshot=await self.snapshot(sid)
+            if snapshot.get('session_expired'):return {'paused':True,'reason':'session_expired','requires_reauthentication':True}
+            if snapshot.get('needs_reconciliation'):return {'paused':True,'reason':'action_outcome_unknown'}
+            if snapshot.get('page_status','ready')!='ready':
+                return {'paused':True,'reason':snapshot['page_status'],'human_signals':snapshot.get('human_signals',[])}
             if snapshot.get('challenge'):
                 return {'paused':True,'reason':'human_verification','challenge':snapshot['challenge']}
             action=await decide(snapshot)
@@ -47,6 +50,6 @@ class CoreBrowserClient:
             except httpx.HTTPStatusError as exc:
                 try:detail=exc.response.json().get('detail','')
                 except ValueError:detail=''
-                stale=any(text in str(detail) for text in ('Page changed since','Target no longer observed','Target changed;'))
-                if stale or exc.response.status_code in (400,401,403,422,429):self.pending_actions.pop(sid,None)
+                stale=not_applied(exc.response) and any(text in str(detail) for text in ('Page changed since','Target no longer observed','Target changed;','not currently actionable'))
+                if stale or exc.response.headers.get('X-Browser-Outcome')=='not_applied' or exc.response.status_code in (400,401,403,422,429):self.pending_actions.pop(sid,None)
                 if exc.response.status_code!=409 or not stale or attempt==max_replans:raise

@@ -45,8 +45,8 @@ def context(ident):
 
 
 async def call(r,method,path,payload=None):
-    if r['state']!='active' or not r['worker_id']:raise HTTPException(409,'Context requires explicit recreation and human reauthentication')
-    try:return await api().worker(method,f'/contexts/{r["worker_id"]}'+path,payload,timeout=30)
+    if (r['state']!='active' and not (r['state']=='needs_reconciliation' and (method=='GET' or method=='DELETE'))) or not r['worker_id']:raise HTTPException(409,'Context requires explicit recreation and human reauthentication')
+    try:return await api().worker(method,f'/contexts/{r["worker_id"]}'+path,payload,timeout=40)
     except HTTPException as exc:
         if exc.status_code==404:
             with api().conn() as db:db.execute("UPDATE browser_contexts SET state='lost' WHERE id=?",(r['id'],))
@@ -74,8 +74,11 @@ async def create(req:ContextStart,x_internal_key:str|None=Header(None)):
 
 
 @router.get('/contexts/{ident}/observe')
-async def observation(ident:str,x_internal_key:str|None=Header(None)):
-    require(x_internal_key);return await call(context(ident),'GET','/observe')
+async def observation(ident:str,x_internal_key:str|None=Header(None),link_offset:int=0,link_query:str=''):
+    require(x_internal_key)
+    if not 0<=link_offset<=10000 or len(link_query)>120:raise HTTPException(422,'Invalid link query or offset')
+    from urllib.parse import urlencode
+    return await call(context(ident),'GET','/observe?'+urlencode({'link_offset':link_offset,'link_query':link_query}))
 
 @router.get('/contexts/{ident}')
 async def state(ident:str,x_internal_key:str|None=Header(None)):
@@ -105,6 +108,7 @@ async def events(ident:str,after:int=0,x_internal_key:str|None=Header(None)):
 @router.post('/contexts/{ident}/actions')
 async def action(ident:str,req:BrowserAction,x_internal_key:str|None=Header(None)):
     require(x_internal_key);r=context(ident)
+    if r['state']!='active':raise HTTPException(409,'Context outcome requires reconciliation before any new action')
     from server.conversation_bridge import active
     if active(ident):raise HTTPException(409,'Citizen conversation response must be resolved before browser actions resume')
     from server.integration import digest
@@ -116,11 +120,15 @@ async def action(ident:str,req:BrowserAction,x_internal_key:str|None=Header(None
         previous=db.execute('SELECT * FROM browser_actions WHERE context_id=? AND action_id=?',(ident,req.action_id)).fetchone()
         if previous:
             if previous['fingerprint']!=fingerprint:raise HTTPException(409,'Action ID changed')
+            if previous['state']=='rejected':
+                error=json.loads(unseal(previous['result'],f'browser-action:{ident}:{req.action_id}'))
+                raise HTTPException(error['status'],error['detail'],headers={'X-Browser-Outcome':'not_applied'})
             if previous['state']!='completed':raise HTTPException(409,'Previous action outcome unknown; observe instead of replaying')
             return {**json.loads(unseal(previous['result'],f'browser-action:{ident}:{req.action_id}')),'replayed':True}
         db.execute('DELETE FROM execution_leases WHERE expires<?',(time.time(),))
         if not db.execute('INSERT OR IGNORE INTO execution_leases VALUES(?,?,?)',(ident,lease,time.time()+60)).rowcount:raise HTTPException(409,'Another context action is in progress')
         db.execute('INSERT INTO browser_actions VALUES(?,?,?, ?,NULL)',(ident,req.action_id,fingerprint,'pending'))
+    dispatched=False
     try:
         payload=req.model_dump()
         if req.kind=='upload':
@@ -129,10 +137,26 @@ async def action(ident:str,req:BrowserAction,x_internal_key:str|None=Header(None
             raw,metadata=read(ident,req.artifact_id)
             meta=json.loads(metadata)
             payload.update(file_base64=base64.b64encode(raw).decode(),file_name=meta['file_name'],file_mime=meta.get('mime_type','application/pdf'))
+        dispatched=True
         result=await call(r,'POST','/actions',payload)
         with api().conn() as db:db.execute("UPDATE browser_actions SET state='completed',result=? WHERE context_id=? AND action_id=?",(seal(json.dumps(result),f'browser-action:{ident}:{req.action_id}'),ident,req.action_id))
         api().audit(ident,'browser_action_observed','General browser action completed',{'kind':req.kind})
         return result
+    except HTTPException as exc:
+        known=not dispatched or (exc.headers or {}).get('X-Browser-Outcome')=='not_applied'
+        with api().conn() as db:
+            if known:
+                result=seal(json.dumps({'status':exc.status_code,'detail':str(exc.detail)}),f'browser-action:{ident}:{req.action_id}')
+                db.execute("UPDATE browser_actions SET state='rejected',result=? WHERE context_id=? AND action_id=?",(result,ident,req.action_id))
+            else:
+                db.execute("UPDATE browser_actions SET state='unknown' WHERE context_id=? AND action_id=?",(ident,req.action_id))
+                db.execute("UPDATE browser_contexts SET state='needs_reconciliation' WHERE id=? AND state='active'",(ident,))
+        raise
+    except BaseException:
+        with api().conn() as db:
+            db.execute("UPDATE browser_actions SET state='unknown' WHERE context_id=? AND action_id=?",(ident,req.action_id))
+            if dispatched:db.execute("UPDATE browser_contexts SET state='needs_reconciliation' WHERE id=? AND state='active'",(ident,))
+        raise
     finally:
         with api().conn() as db:db.execute('DELETE FROM execution_leases WHERE token=?',(lease,))
 
@@ -156,7 +180,7 @@ async def upload_artifact(ident:str,req:GeneralDocument,x_internal_key:str|None=
 @router.delete('/contexts/{ident}')
 async def close(ident:str,x_internal_key:str|None=Header(None)):
     require(x_internal_key);r=context(ident)
-    if r['state']=='active':
+    if r['state'] in ('active','needs_reconciliation'):
         try:await call(r,'DELETE','')
         except HTTPException as exc:
             if exc.status_code!=409:raise

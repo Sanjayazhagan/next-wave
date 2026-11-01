@@ -21,7 +21,7 @@ def test_invalid_prepared_document_rejected(raw,name,mime):
 
 @pytest.mark.asyncio
 async def test_duplicate_concurrent_action_and_changed_payload(monkeypatch):
-    ctx=SimpleNamespace(lock=asyncio.Lock())
+    ctx=SimpleNamespace(lock=asyncio.Lock(),context=SimpleNamespace(pages=[SimpleNamespace(is_closed=lambda:False)]))
     info=core.BridgeSession('fixture-context','fixture')
     monkeypatch.setitem(contexts,info.context_id,ctx)
     monkeypatch.setitem(core.bridges,'audit-session',info)
@@ -43,7 +43,7 @@ async def test_duplicate_concurrent_action_and_changed_payload(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_uncertain_effect_blocks_a_new_action_id(monkeypatch):
-    ctx=SimpleNamespace(lock=asyncio.Lock())
+    ctx=SimpleNamespace(lock=asyncio.Lock(),context=SimpleNamespace(pages=[SimpleNamespace(is_closed=lambda:False)]))
     info=core.BridgeSession('uncertain-context','fixture')
     monkeypatch.setitem(contexts,info.context_id,ctx);monkeypatch.setitem(core.bridges,'uncertain-session',info)
     async def unknown(sid,req,info,ctx):
@@ -118,6 +118,8 @@ def test_release_contains_integrated_compose_and_excludes_private_data():
     with zipfile.ZipFile(package()) as archive:
         names=archive.namelist()
         assert 'gradientzero-browser/compose.integrated.yaml' in names
+        assert 'gradientzero-browser/browser/dom_census.js' in names
+        assert 'gradientzero-browser/browser/native_submit.py' in names
         assert not any('/data/' in n or n.endswith('/.env') or 'browser-test-results' in n for n in names)
 
 

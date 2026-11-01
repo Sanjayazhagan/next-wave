@@ -79,7 +79,7 @@ async def offer(sid:str,req:Offer,request:Request,x_internal_key:str|None=Header
         db.execute('INSERT INTO core_assist_tasks VALUES (?,?,?,?,?,?,?)',
                    (task_id,sid,digest(token),expiry,req.reason,'offering',time.time()))
     try:
-        await api().worker('POST',f'/core/session/{sid}/human-begin',{'task_id':task_id,'expires_at':expiry})
+        await api().worker('POST',f'/core/session/{sid}/human-begin',{'task_id':task_id,'expires_at':expiry,'reason':req.reason})
         with api().conn() as db:db.execute("UPDATE core_assist_tasks SET state='active' WHERE id=?",(task_id,))
     except BaseException:
         with api().conn() as db:db.execute("UPDATE core_assist_tasks SET state='needs_reconciliation' WHERE id=?",(task_id,))

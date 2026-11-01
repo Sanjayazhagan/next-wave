@@ -19,7 +19,8 @@ let busy=false,observationId=null;
 async function control(payload){if(busy)return;busy=true;try{await api('control','POST',{...payload,observation_id:observationId});feedback('Browser updated. Check the result and continue if needed.');await refresh()}catch(err){feedback(err.message)}finally{busy=false}}
 async function refresh(){
   const data=await api('view');observationId=data.observation_id;expires=data.expires_at||0;viewport=data.viewport||viewport;challengeBoxes=data.challenge_boxes||[];
-  $('#screen').src='data:image/jpeg;base64,'+data.screenshot_base64;
+  if(data.screenshot_base64){$('#screen').src='data:image/jpeg;base64,'+data.screenshot_base64;$('#screen').hidden=false}
+  else{$('#screen').hidden=true;feedback('Preview is temporarily unavailable. Refresh before clicking a visual challenge.')}
   $('#url').textContent=data.url;
   const wrap=$('#controls');wrap.replaceChildren();
   if(!data.controls.length)append('p',wrap,'No editable OTP/CAPTCHA controls detected. If a challenge is inside a framed widget, click the image inside that widget.');
@@ -27,7 +28,7 @@ async function refresh(){
     const row=append('div',wrap,null,'control');
     if(item.category==='human_input'){
       const label=append('label',row,item.label||'Verification code');
-      const inp=append('input',row);inp.autocomplete='one-time-code';inp.inputMode='text';inp.maxLength=100;inp.type=item.type==='password'?'password':'text';
+      const inp=append('input',row);inp.autocomplete=item.type==='password'?'current-password':(/otp|one.time|verification code/i.test(item.label)?'one-time-code':'off');inp.inputMode=item.type==='number'?'numeric':'text';inp.maxLength=100;inp.type=item.type==='password'?'password':'text';
       const btn=append('button',row,'Enter verification value');btn.type='button';
       btn.onclick=()=>{const value=inp.value;inp.value='';control({kind:'fill',target_ref:item.ref,value})};
       label.htmlFor=inp.id='auth-'+item.ref.replace(/[^a-zA-Z0-9-]/g,'');

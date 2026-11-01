@@ -229,7 +229,7 @@ def audit(sid,typ,summary,data=None):
         c.commit()
 
 async def worker(method,path,payload=None,timeout=20):
-    async with httpx.AsyncClient(timeout=timeout, headers={'X-Internal-Key':KEY}) as client:
+    async with httpx.AsyncClient(timeout=timeout, trust_env=False, headers={'X-Internal-Key':KEY}) as client:
         try:
             res = await client.request(method,WORKER+path,json=payload)
         except httpx.ConnectError:
@@ -239,7 +239,7 @@ async def worker(method,path,payload=None,timeout=20):
         if res.status_code >= 400:
             try: detail=res.json().get('detail','Browser action failed')
             except Exception: detail='Browser action failed'
-            raise HTTPException(res.status_code,str(detail)[:180])
+            raise HTTPException(res.status_code,str(detail)[:180],headers={**({'X-Browser-Outcome':res.headers['x-browser-outcome']} if res.headers.get('x-browser-outcome') in ('not_applied','unknown') else {}),**({'Retry-After':str(min(60,max(0,int(res.headers['retry-after']))))} if res.headers.get('retry-after','').isdigit() else {})})
         return res.json()
 
 def public(r):

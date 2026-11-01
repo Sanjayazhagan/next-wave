@@ -109,9 +109,12 @@ async def test_core_session_accepts_dynamic_url_only_with_consent(monkeypatch):
 
     class Page:
         def __init__(self):self.url='about:blank'
+        def on(self,*args):pass
         async def goto(self,url,**kwargs):self.url=url
     class Context:
         def __init__(self):self.page=Page();self.closed=False
+        @property
+        def pages(self):return [self.page]
         async def new_page(self):return self.page
         async def route(self,*args):pass
         async def route_web_socket(self,*args):pass
@@ -124,7 +127,7 @@ async def test_core_session_accepts_dynamic_url_only_with_consent(monkeypatch):
        app=SimpleNamespace(state=SimpleNamespace(browser=Browser())),
        require_key=lambda x: None)
     monkeypatch.setattr(core,'worker',lambda:fake)
-    monkeypatch.setattr(core,'observe',lambda ctx: asyncio.sleep(0))
+    monkeypatch.setattr(core,'observe',lambda ctx,**kwargs: asyncio.sleep(0))
     async def public_check(url):
         assert url == 'https://www.wikipedia.org/wiki/Python'
     monkeypatch.setattr(core,'assert_public_url',public_check)

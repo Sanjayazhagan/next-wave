@@ -35,7 +35,7 @@ async def sweep(app, at=None):
         rows = db.execute('SELECT id,worker_id FROM sessions WHERE created_at<?', (cutoff,)).fetchall()
         general_rows=db.execute('SELECT id,worker_id,state FROM browser_contexts WHERE created<?',(at.timestamp()-30*86400,)).fetchall()
     for row in general_rows:
-        if row['worker_id'] and row['state']=='active':
+        if row['worker_id'] and row['state'] in ('active','needs_reconciliation'):
             try:await app.worker('DELETE','/contexts/'+row['worker_id'])
             except Exception:continue
         from server.conversation_bridge import purge_context

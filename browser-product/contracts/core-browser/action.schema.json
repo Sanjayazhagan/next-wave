@@ -38,6 +38,56 @@
       "title": "Type",
       "type": "string"
     },
+    "checked": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Checked"
+    },
+    "verified": {
+      "default": false,
+      "title": "Verified",
+      "type": "boolean"
+    },
+    "source_ref": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Ref"
+    },
+    "tab_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tab Id"
+    },
+    "values": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Values",
+      "type": "array"
+    },
     "target": {
       "anyOf": [
         {

@@ -26,6 +26,9 @@ def category(control: dict, *, has_file=False, has_auth=False) -> str:
         return 'human_input'
     if kind == 'file':
         return 'file_input'
+    if tag=='input' and kind not in ('submit','button','reset','image'):
+        return 'ordinary'
+    if kind=='reset':return 'ordinary'
     if tag not in ('a','button','input') and control.get('role') not in ('button','link'):
         return 'ordinary'
     # A plain Submit button can belong to a *dedicated document-only upload form*.
@@ -37,8 +40,11 @@ def category(control: dict, *, has_file=False, has_auth=False) -> str:
             and control.get('form_upload_only') and control.get('form_has_file')
             and not RISKY_PATH.search(urlsplit(action).path)):
         return 'upload_step'
-    if FINAL.search(label) or RISKY_PATH.search(urlsplit(href).path) or RISKY_PATH.search(urlsplit(action).path):
+    if FINAL.search(label) or RISKY_PATH.search(urlsplit(href).path) or ((kind in ('submit','image') or (tag=='button' and kind not in ('button','reset'))) and RISKY_PATH.search(urlsplit(action).path)):
         return 'final'
+    if control.get('form_search_only') and str(control.get('form_method','')).lower()=='get' and re.fullmatch(r'(?:google )?search(?: wikipedia)?',label,re.I):return 'search'
+    if control.get('form_auth') and re.fullmatch(r'sign[ -]?in|log[ -]?in|login|next|continue|verify',label,re.I):
+        return 'auth_submit'
     if CAPTCHA_REFRESH.search(label):
         return 'captcha_refresh'
     if OTP_SEND.search(label) and (has_auth or re.search(r'otp|verification|login',label,re.I)):

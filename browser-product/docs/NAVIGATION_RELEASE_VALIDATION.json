@@ -1,0 +1,12 @@
+{
+  "date": "2026-11-01",
+  "pytest": {"passed": 106, "failed": 0, "warnings": 1, "seconds": 98.83},
+  "warning": "Upstream Starlette TestClient/httpx deprecation",
+  "general_browser_real_http_synthetic": "passed after final correction",
+  "conversation_real_http_synthetic": "passed before final accessibility-only correction",
+  "mobile_handoff_real_http_synthetic": "passed before final accessibility-only correction",
+  "public_trial_report": "NAVIGATION_VERIFICATION_NOV01.md",
+  "actual_model_or_chat_provider_tested": false,
+  "docker_tested": false,
+  "cloud_deployed": false
+}

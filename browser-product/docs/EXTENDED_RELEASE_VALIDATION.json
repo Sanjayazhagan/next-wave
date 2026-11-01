@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-01",
+  "pytest": {"passed": 121, "failed": 0, "warnings": 1, "seconds": 143.77},
+  "warning": "Upstream Starlette TestClient/httpx deprecation",
+  "general_browser_real_http_synthetic": "passed after final identity safeguards",
+  "conversation_real_http_synthetic": "passed before final identity-only safeguards",
+  "mobile_handoff_real_http_synthetic": "passed before final identity-only safeguards",
+  "live_wikipedia_search": "article reached without final approval",
+  "live_google_search": "browser search policy passed; Google anti-bot page encountered",
+  "live_mdn_search_overlay": "opened and input readback passed",
+  "actual_model_or_chat_provider_tested": false,
+  "docker_tested": false,
+  "cloud_deployed": false
+}
