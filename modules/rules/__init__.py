@@ -19,7 +19,7 @@ from .engine import rank
 from .explain import cited_clause
 from .loader import load_all
 from .models import Question, Scheme
-from .questions import missing_questions
+from .questions import INCOME_BANDS, missing_questions
 
 log = logging.getLogger(__name__)
 
@@ -30,11 +30,14 @@ def portal_for(scheme_portal_id: str) -> str:
     return env("DEMO_PORTAL_ID") or scheme_portal_id
 
 
-# Value to store -> button label, for answers the rules compare exactly.
+# Value to store -> button label, for answers the rules compare exactly. Labels are distinct phrases
+# (no bare "Yes"/"No"): core translates by replacing known English text inside a message.
 ANSWERS = {
     "gender": {"female": "Female", "male": "Male", "transgender": "Transgender"},
-    "disability_percent": {"40": "Yes, 40% or more", "10": "Yes, under 40%", "0": "No"},
-    "govt_school_6_to_12": {"yes": "Yes", "no": "No"},
+    "disability_percent": {"40": "Yes, 40% or more", "10": "Yes, under 40%", "0": "No disability certificate"},
+    "govt_school_6_to_12": {"yes": "Yes, all in government schools", "no": "No, not all"},
+    # A band stores its upper bound; "More than 8 lakh" stores 800001, so it fails an 8 lakh ceiling.
+    "annual_income": {value: label for label, value in INCOME_BANDS.items()},
 }
 
 
