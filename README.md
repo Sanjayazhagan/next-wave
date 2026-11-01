@@ -9,6 +9,8 @@ browser, in the student's own language, by voice or text. **The student presses 
 | | |
 | --- | --- |
 | **Try the bot** | **[t.me/Dakiya_seva_bot](https://t.me/Dakiya_seva_bot)** (free, no sign-up; pick a language and send a text or voice note) |
+| **Demo video** | **[Watch the demo](https://youtube.com/shorts/9FOum4HH87M)** |
+| **Pitch deck** | **[Open the slides](https://docs.google.com/presentation/d/1PYdA2geE0mO8BC6-wijWMb3zbrExwRQ3/edit?usp=drive_link)** |
 | **Live API** | `https://api-production-be3b1.up.railway.app/health` |
 
 > Today Dakiya fills a **public practice form**, not a live government portal: real portals need
