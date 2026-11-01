@@ -35,17 +35,16 @@ def test_extract_returns_contract_types(tmp_path, monkeypatch):
     _fake_ocr(monkeypatch)
     prompts = []
 
-    def fake_vision(images, prompt, schema, caller, system=None):
+    def fake_vision(images, prompt, schema, caller, system=None, shape=None):
         prompts.append(caller)
-        if caller == "extraction.classify":
-            return schema(doc_type="income")
-        return schema(full_name={"value": "S. SATYAJIT", "evidence": "S. SATYAJIT"},
-                      annual_income={"value": "250000", "evidence": "Rs. 2,50,000"},
+        # One call decides the type and reads the fields; the income comes back as a number.
+        return schema(doc_type="Income Certificate",
+                      full_name={"value": "S. SATYAJIT", "evidence": "S. SATYAJIT"},
+                      annual_income={"value": 250000, "evidence": "Rs. 2,50,000"},
                       issue_date={"value": "2025-06-01", "evidence": "01/06/2025"},
                       certificate_number={"value": "UID 1234 5678 9012", "evidence": "1234 5678 9012"})
 
     monkeypatch.setattr(pipeline, "vision_json", fake_vision)
-    monkeypatch.setattr(importlib.import_module("modules.extraction.classify"), "vision_json", fake_vision)
 
     result = asyncio.run(load_plugins().extraction([DocumentImage(file_ref="core-ref-1", mime_type="image/jpeg", data=_jpeg())]))
 
@@ -58,9 +57,7 @@ def test_extract_returns_contract_types(tmp_path, monkeypatch):
     assert result.profile.fields["full_name"].confidence >= 0.95
     assert doc.fields["aadhaar_last4"].value == "9012"
     assert "1234 5678 9012" not in result.model_dump_json()
-    # A low-confidence field (the masked certificate number) may get one zoomed retry.
-    assert prompts[:2] == ["extraction.classify", "extraction.extract"]
-    assert set(prompts[2:]) <= {"extraction.retry"}
+    assert prompts == ["extraction.extract"]   # one model call per document
 
 
 def test_unreadable_upload_is_skipped(monkeypatch):
@@ -104,3 +101,12 @@ def test_the_blurred_working_copy_is_deleted_after_reading(monkeypatch, tmp_path
     monkeypatch.setattr(extraction, "extract_pages", lambda pages: result)
     extraction.extract_sync([DocumentImage(file_ref="a" * 32, mime_type="image/jpeg", data=b"x")])
     assert not copy.exists()
+
+
+def test_read_accepts_numbers_and_bare_values():
+    from modules.extraction.schemas import Read, doc_type_of, schema_for
+    model = schema_for("income")
+    m = model.model_validate({"annual_income": 144000, "full_name": "Solairajan P", "issue_date": None})
+    assert m.annual_income == Read(value="144000") and m.full_name.value == "Solairajan P" and m.issue_date is None
+    assert [doc_type_of(t) for t in ("Income Certificate", "OBC certificate", "Statement of Results", "Aadhaar")] == [
+        "income", "community", "marksheet", "other"]

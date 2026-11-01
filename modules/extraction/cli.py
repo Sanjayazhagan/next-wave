@@ -14,7 +14,7 @@ def main() -> None:
     ap.add_argument("--id", dest="doc_id")
     ap.add_argument("--no-retry", action="store_true")
     a = ap.parse_args()
-    print(extract_paths(a.paths, a.doc_type, a.doc_id, retry=not a.no_retry).model_dump_json(indent=2))
+    print(extract_paths(a.paths, a.doc_type, a.doc_id, retry=False if a.no_retry else None).model_dump_json(indent=2))
 
 
 if __name__ == "__main__":

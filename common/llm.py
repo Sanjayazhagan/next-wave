@@ -145,9 +145,13 @@ def _complete(model: str, messages: list[dict], schema: type[T], caller: str) ->
     raise LLMError(f"{caller}: no valid JSON after retry") from last_err
 
 
-def vision_json(images: list[bytes], prompt: str, schema: type[T], caller: str, system: str | None = None) -> T:
-    """Send images + prompt to VISION_MODEL; return a validated `schema` instance."""
-    content: list[dict] = [{"type": "text", "text": f"{prompt}\n\n{_schema_instruction(schema)}"}]
+def vision_json(images: list[bytes], prompt: str, schema: type[T], caller: str, system: str | None = None,
+                shape: str | None = None) -> T:
+    """Send images + prompt to VISION_MODEL; return a validated `schema` instance.
+
+    `shape` replaces the JSON Schema in the prompt with a shorter description of the reply.
+    """
+    content: list[dict] = [{"type": "text", "text": f"{prompt}\n\n{shape or _schema_instruction(schema)}"}]
     for img in images:
         content.append({"type": "image_url", "image_url": {
             "url": f"data:{_mime(img)};base64,{base64.b64encode(img).decode()}"}})

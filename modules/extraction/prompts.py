@@ -1,48 +1,34 @@
-"""Prompts for document classification and field extraction."""
+"""Prompts for document reading (one call decides the type and reads the fields)."""
 
+# Kept short on purpose: every call's text counts against Groq's per-minute token allowance.
 SYSTEM = (
-    "You read Indian government and academic documents, often bilingual Tamil and English. "
-    "Return only values printed on the document. If a field is not printed, return null. "
-    "Never infer or guess. Copy names exactly as printed, including initials. Dates as YYYY-MM-DD. "
-    "Income as an integer number of rupees per year. `valid_until` is the end date of the printed "
-    "'Certificate validity period' (null if none is printed). For each field also return `evidence`: "
-    "the exact printed text you read it from."
+    "You read Indian certificates and marksheets (often Tamil and English). Return only values printed "
+    "on the document, else null; never guess. Names exactly as printed, with initials. Dates YYYY-MM-DD. "
+    "Income: integer rupees per year. valid_until: end of the printed 'validity period'. "
+    "evidence: the exact printed text each value came from."
 )
 
 LAYOUT_HINTS = {
-    "marksheet": (
-        "Marksheets: the student's name and register number are near the top; the institution or board "
-        "is in the header; the course/programme and semester or year are under the header; the total, "
-        "maximum marks and percentage or CGPA are at the bottom of the marks table; the exam month and "
-        "year are in the header or footer. If no percentage is printed, return marks_total and marks_max."
-    ),
-    "income": (
-        "Tamil Nadu income certificates (Revenue Department): the certificate number and date are at the "
-        "top; the body says 'This is to certify that <name> son/daughter of <father>' followed by the "
-        "address with taluk and district; the annual family income is written in figures and words in the "
-        "body. Return the income in figures as an integer."
-    ),
-    "community": (
-        "Tamil Nadu community certificates: the certificate number and date are at the top; the body names "
-        "the person, their father, the village/taluk/district, the caste (e.g. 'Nadar', 'Vanniyar') and the "
-        "category it belongs to. Put the caste in `caste` and the category in `community`, never the caste. "
-        "The category is a class such as Backward Class, Most Backward Class, Denotified Community, "
-        "Scheduled Caste or Scheduled Tribe; for an 'Other Backward Class' (OBC) certificate issued under the "
-        "Government of India, the category is 'Other Backward Class'."
-    ),
+    "marksheet": "Marksheet: name near the top; institution in the header; percentage or total and maximum "
+                 "marks (marks_total, marks_max) under the marks table; exam year in header or footer.",
+    "income": "Income certificate: number and date at the top; 'certify that <name> son/daughter of "
+              "<father>'; annual family income in figures.",
+    "community": "Community certificate: caste (e.g. Nadar) goes in caste; community is the category: "
+                 "Backward Class, Most Backward Class, Denotified Community, Scheduled Caste/Tribe, or "
+                 "'Other Backward Class' for a central OBC certificate.",
 }
 
-CLASSIFY = (
-    "Which kind of document is this? marksheet (academic mark statement or grade card), "
-    "income (income certificate), community (caste/community certificate), or other."
-)
-
+DOC_TYPES = ("doc_type: marksheet, income (income certificate), community (caste/community certificate) or "
+             "other. Fill only that type's fields; null for the rest.")
 
 NAMES = {"marksheet": "marksheet", "income": "income certificate", "community": "community certificate"}
 
 
-def extract_prompt(doc_type: str) -> str:
-    return f"Extract the fields from this {NAMES[doc_type]}. {LAYOUT_HINTS[doc_type]}"
+def extract_prompt(doc_type: str | None) -> str:
+    """Prompt for one known type, or (None) for deciding the type and reading it in the same call."""
+    if doc_type:
+        return f"Extract the fields from this {NAMES[doc_type]}. {LAYOUT_HINTS[doc_type]}"
+    return "Decide what this document is and extract its fields. " + DOC_TYPES + " " + " ".join(LAYOUT_HINTS.values())
 
 
 def retry_prompt(doc_type: str, field: str) -> str:

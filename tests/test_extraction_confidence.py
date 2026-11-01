@@ -44,3 +44,31 @@ def test_merge_keeps_highest_confidence_and_user_answers():
                        _doc("marksheet", full_name=("S. Satyajit", 0.95))], prior)
     assert p.fields["full_name"].source_document == "marksheet"
     assert p.fields["community"].value == "BC / MBC"
+
+
+def _words_line(*pairs, y=100):
+    from modules.extraction.ocr import OcrWord
+    words = [OcrWord(t, c, (10 + 80 * i, y, 70, 20), (1, 1, 1)) for i, (t, c) in enumerate(pairs)]
+    return OcrLine(text=" ".join(t for t, _ in pairs), box=(10, y, 400, 20), words=words)
+
+
+def test_snap_to_print_fixes_a_one_letter_slip():
+    from modules.extraction.confidence import snap_to_print
+    lines = [_words_line(("certify", 95), ("that", 96), ("Shri.", 90), ("Satyajit", 93), ("son", 95))]
+    assert snap_to_print("Sathyajit", lines) == "Satyajit"
+    assert snap_to_print("SATHYAJIT S", lines) == "SATYAJIT S"
+
+
+def test_snap_to_print_leaves_unsure_or_different_words():
+    from modules.extraction.confidence import snap_to_print
+    unsure = [_words_line(("Satyajit", 60))]
+    assert snap_to_print("Sathyajit", unsure) == "Sathyajit"          # OCR not confident
+    other = [_words_line(("Ramesh", 95))]
+    assert snap_to_print("Sathyajit", other) == "Sathyajit"           # not a near match
+    assert snap_to_print("K. Priya", [_words_line(("K.", 95), ("Priya", 95))]) == "K. Priya"
+
+
+def test_snap_fixes_a_place_name():
+    from modules.extraction.confidence import snap_to_print
+    lines = [_words_line(("District", 95), (":", 90), ("Chengalpattu", 92))]
+    assert snap_to_print("Chengalpatu", lines) == "Chengalpattu"
