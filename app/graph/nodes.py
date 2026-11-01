@@ -206,15 +206,14 @@ class Nodes:
 
     async def collect_documents(self, state: AgentState) -> dict[str, Any]:
         file_refs = state.get("file_refs", [])
-        intro = None
         if state.get("documents_needed"):
             text = messages.DOCUMENTS_NEEDED
         elif file_refs:
             text = messages.DOCUMENT_RECEIVED
         else:
-            intro = state.get("documents_intro")
-            text = intro or messages.DOCUMENTS
-        reply = ask("documents", text, {"done": "Done"}, localized=bool(intro))
+            # Always the fixed list: the AI's own sign-off doesn't name the documents.
+            text = messages.DOCUMENTS
+        reply = ask("documents", text, {"done": "Done"})
         if reply.get("file_ref"):
             entry = {"file_ref": reply["file_ref"], "mime_type": reply.get("mime_type", "image/jpeg")}
             return {"file_refs": [*file_refs, entry], "documents_needed": False}

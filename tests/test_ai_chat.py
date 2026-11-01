@@ -63,8 +63,8 @@ def test_natural_chat_gathers_the_details_then_asks_for_documents(
 
     texts = network.telegram_texts()
     assert "Vanakkam! Neenga enna padikkireenga?" in texts
-    assert texts[-1].startswith("Nandri! Documents photo")
-    # The Done button comes with the AI's message.
+    assert "income certificate and community certificate" in texts[-1]
+    # The Done button comes with the document list.
     assert network.telegram_calls("sendMessage")[-1]["reply_markup"]
 
     profile = profile_of(telegram_client)
@@ -304,7 +304,7 @@ def test_wrong_income_can_be_corrected(
     assert (income["value"], income["source_document"]) == ("120000", "user_edit")
 
     chat.press("confirm:yes")
-    assert network.telegram_texts()[-1] == "Nandri!"
+    assert network.telegram_texts()[-1] .startswith("Please send photos")
 
 
 @pytest.mark.parametrize("bad", ["3 one lakh", "9 120000", "hello", "4 Martian"])
@@ -327,7 +327,7 @@ def test_community_can_be_corrected_with_a_short_word(
 def test_typing_yes_also_confirms(chat: TelegramChat, network: Network) -> None:
     wrong_income_chat(chat, network)
     chat.text("yes")
-    assert network.telegram_texts()[-1] == "Nandri!"
+    assert network.telegram_texts()[-1] .startswith("Please send photos")
 
 
 def test_correction_is_never_sent_to_the_ai(chat: TelegramChat, network: Network) -> None:
