@@ -1,14 +1,8 @@
-"""Document type classification (only used when the caller doesn't pass doc_type)."""
+"""Encode page images for the vision model."""
 from __future__ import annotations
 
 import cv2
 import numpy as np
-
-from common.llm import vision_json
-from .models import DocType
-
-from .prompts import CLASSIFY, SYSTEM
-from .schemas import DocTypeAnswer
 
 
 def jpeg_bytes(img: np.ndarray, max_side: int = 2000, quality: int = 90) -> bytes:
@@ -20,8 +14,3 @@ def jpeg_bytes(img: np.ndarray, max_side: int = 2000, quality: int = 90) -> byte
     if not ok:
         raise RuntimeError("JPEG encoding failed")
     return buf.tobytes()
-
-
-def classify(img: np.ndarray) -> DocType:
-    return vision_json([jpeg_bytes(img)], CLASSIFY, DocTypeAnswer, caller="extraction.classify",
-                       system=SYSTEM).doc_type

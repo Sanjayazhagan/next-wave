@@ -1,7 +1,7 @@
 """Run every fixtures/voice/*.ogg through each configured STT provider and print a table.
 
 Use it to choose STT_PRIMARY: Tamil-English mixed speech is the main risk.
-    uv run python scripts/compare_stt.py [--lang ta] [--sarvam-modes transcribe,codemix]
+    uv run python -m scripts.compare_stt [--lang ta] [--sarvam-modes transcribe,codemix]
 """
 from __future__ import annotations
 

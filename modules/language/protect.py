@@ -1,6 +1,8 @@
 """Keep amounts, dates, IDs and named terms intact through machine translation.
 
-mask() swaps them for tokens ⟦0⟧, ⟦1⟧ ... before translating; unmask() puts them back.
+mask() swaps them for tokens #0#, #1# ... before translating; unmask() puts them back.
+Token style tested on Sarvam (1 Nov 2026): "⟦0⟧" was turned into a bare "0" in 2 of 3 sentences
+("Our family's annual income is 0."); "#0#" came through in every case, both directions.
 """
 from __future__ import annotations
 
@@ -19,7 +21,7 @@ _PATTERNS = [
 
 
 def token(i: int) -> str:
-    return f"⟦{i}⟧"
+    return f"#{i}#"
 
 
 def mask(text: str, keep: list[str] | None = None) -> tuple[str, list[str]]:
@@ -38,7 +40,7 @@ def mask(text: str, keep: list[str] | None = None) -> tuple[str, list[str]]:
     return text, originals
 
 
-_TOKEN = re.compile(r"⟦\s*(\d+)\s*⟧")
+_TOKEN = re.compile(r"#\s*(\d+)\s*#")
 
 
 def unmask(text: str, originals: list[str]) -> tuple[str, list[str]]:

@@ -20,7 +20,7 @@ QUESTIONS = {
     "annual_income": Question(field="annual_income", text_en="What is your family's yearly income?",
                               choices=list(INCOME_BANDS)),
     "community": Question(field="community", text_en="What is your community category?",
-                          choices=["SC", "ST", "BC", "MBC", "OC", "Other"]),
+                          choices=["SC", "ST", "BC", "MBC", "OC", "Other or not sure"]),
     "year_of_study": Question(field="year_of_study", text_en="Which year of your course are you in?",
                               choices=["1st year", "2nd year (lateral entry)", "2nd year", "3rd year", "4th year"]),
     "gender": Question(field="gender", text_en="What is your gender?", choices=["Female", "Male", "Transgender"]),
@@ -29,7 +29,7 @@ QUESTIONS = {
                                    text_en="Do you have a disability certificate? If yes, what percentage does it show?"),
     "govt_school_6_to_12": Question(field="govt_school_6_to_12",
                                     text_en="Did you study from Class 6 to 12 in Tamil Nadu government schools?",
-                                    choices=["Yes", "No"]),
+                                    choices=["Yes, all in government schools", "No, not all"]),
 }
 
 

@@ -104,6 +104,9 @@ def _load(data: bytes, source: str | None, actions: list[str]) -> list[np.ndarra
     # Photos: crop to the paper and straighten, as extraction does.
     out = []
     for p in pages:
+        p, turned = preprocess.upright(p)
+        if turned:
+            actions.append(f"rotated {turned}°")
         cropped, found = preprocess.find_document(p)
         if found:
             actions.append("cropped")

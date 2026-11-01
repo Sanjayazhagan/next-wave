@@ -78,7 +78,7 @@ def test_passed_deadline_makes_scheme_not_eligible(tmp_path):
 def test_core_community_buttons(tmp_path):
     s = scheme(tmp_path, [COMMUNITY])
     assert match(s, profile(community="SC / ST")).status == "not_eligible"   # no SC/ST member qualifies
-    assert match(s, profile(community="BC / MBC")).status == "needs_info"    # BC/MBC answer: BCM/OBC uncertain
+    assert match(s, profile(community="BC / MBC")).status == "eligible"      # BC, BCM, MBC, DNC all qualify
     assert match(s, profile(community="sc_st")).status == "not_eligible"     # button ids work too
     assert match(s, profile(community="General")).status == "not_eligible"
     assert match(s, profile(community="Most Backward Class")).status == "eligible"
@@ -187,5 +187,22 @@ def test_no_questions_remain_once_all_are_answered() -> None:
     assert ranked(**answers).questions == []
 
 
-def test_a_grouped_community_is_asked_exactly_when_it_decides_a_scheme() -> None:
-    assert "community" in [q.field for q in ranked().questions]
+def test_a_grouped_community_is_asked_exactly_when_it_decides_a_scheme(tmp_path) -> None:
+    # "BC / MBC" settles the TN post-matric rule (BC, BCM, MBC and DNC all qualify): no question.
+    assert "community" not in [q.field for q in ranked().questions]
+    # A rule that splits the group (MBC only) can't be settled by "BC / MBC": ask for the exact one.
+    mbc_only = scheme(tmp_path, [{**COMMUNITY, "value": ["MBC"]}])
+    assert "community" in [q.field for q in missing_questions([mbc_only], profile(community="BC / MBC"))]
+
+
+def test_bc_muslim_counts_as_backward_class(tmp_path):
+    s = scheme(tmp_path, [COMMUNITY])                    # rule lists BC, MBC, DNC
+    assert match(s, profile(community="BCM")).status == "eligible"
+    assert match(s, profile(community="Backward Class (Muslim)")).status == "eligible"
+    assert match(s, profile(community="SCA")).status == "not_eligible"   # SCA is SC, not listed
+
+
+def test_arunthathiyar_counts_as_scheduled_caste(tmp_path):
+    rule = {**COMMUNITY, "value": ["SC", "ST"]}
+    s = scheme(tmp_path, [rule])
+    assert match(s, profile(community="SCA")).status == "eligible"

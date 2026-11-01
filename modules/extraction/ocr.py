@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from functools import lru_cache
 
@@ -10,6 +11,10 @@ import pytesseract
 
 log = logging.getLogger(__name__)
 MIN_CONF = 30
+
+# Tesseract's OpenMP threads fight each other when called from Python: one thread is about
+# twice as fast here (a full page went from 13.7 s to 5.9 s). Set before any tesseract call.
+os.environ.setdefault("OMP_THREAD_LIMIT", "1")
 
 
 @dataclass

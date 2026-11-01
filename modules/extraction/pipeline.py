@@ -20,16 +20,25 @@ from common.textnorm import norm_amount, norm_category, norm_date, strip_honorif
 
 from . import confidence, ocr, preprocess
 from .qr import read_qr
-from .classify import classify, jpeg_bytes
+from .encode import jpeg_bytes
 from .mask import mask_text, redact
 from .models import DocResult, DocType, FieldRead, Quality
 from .prompts import SYSTEM, extract_prompt, retry_prompt
-from .schemas import FIELDS_BY_TYPE, HELPER_FIELDS, Read, schema_for
+from .schemas import FIELDS_BY_TYPE, HELPER_FIELDS, Read, doc_type_of, schema_for, shape
 
 log = logging.getLogger(__name__)
 RETRY_BELOW = 0.6
 RETRY_PAD = 40
 MAX_IMAGES = 3   # Groq's vision models take at most 3 images per request
+
+
+def max_pages() -> int:
+    """Pages read per document. Certificates and marksheets carry their details on page 1, and
+    each extra page costs about 2,500 tokens of a tight per-minute and per-day allowance."""
+    try:
+        return max(1, min(MAX_IMAGES, int(env("EXTRACTION_MAX_PAGES", "1"))))
+    except ValueError:
+        return 1
 
 
 @dataclass
@@ -62,7 +71,8 @@ def typed(field: str, raw: str | None) -> object:
 
 
 def _clean_page(raw: np.ndarray) -> tuple[_Page, dict[str, list[str]]]:
-    img, _ = preprocess.find_document(raw)
+    img, _ = preprocess.upright(raw)
+    img, _ = preprocess.find_document(img)
     img, skew = preprocess.deskew(img)
     words = ocr.read_words(img)
     # Mask before saving and before any LLM call: the model never sees a full number.
@@ -96,11 +106,22 @@ def _best_page(pages: list[_Page], value: object, evidence: str | None) -> _Page
     return max(pages, key=lambda p: confidence.score("_", value, evidence, p.lines)[0])
 
 
+def field_retry_on() -> bool:
+    """Zoomed re-reads of weak fields cost one image call each, so they're off unless asked for."""
+    return env("EXTRACTION_FIELD_RETRY", "0") == "1"
+
+
 def extract_pages(raw_pages: list[np.ndarray], doc_type: DocType | None = None, doc_id: str | None = None,
-                  retry: bool = True) -> DocResult:
-    """Extract one document from its page images."""
+                  retry: bool | None = None) -> DocResult:
+    """Extract one document from its page images: one model call, which also decides the type
+    when `doc_type` isn't given."""
+    retry = field_retry_on() if retry is None else retry
     if not raw_pages:
         raise ValueError("no pages to extract")
+    qr_pages = raw_pages   # the QR check is cheap, so it looks at every page
+    if len(raw_pages) > max_pages():
+        log.info("Document has %d pages; reading the first %d", len(raw_pages), max_pages())
+        raw_pages = raw_pages[:max_pages()]
     t0 = time.perf_counter()
     doc_id = doc_id or uuid.uuid4().hex[:12]
     pages: list[_Page] = []
@@ -112,20 +133,19 @@ def extract_pages(raw_pages: list[np.ndarray], doc_type: DocType | None = None, 
             last4s.setdefault(k, []).extend(v)
     masked_ref = _save([p.img for p in pages], doc_id)
 
-    if doc_type is None:
-        doc_type = classify(pages[0].img)
     reads: dict[str, tuple[object, str | None, float, list[float] | None]] = {}
+    answer = vision_json([jpeg_bytes(p.img) for p in pages], extract_prompt(doc_type),
+                         schema_for(doc_type), caller="extraction.extract", system=SYSTEM, shape=shape(doc_type))
+    if doc_type is None:
+        doc_type = doc_type_of(answer.doc_type)
     if doc_type in FIELDS_BY_TYPE:
-        schema = schema_for(doc_type)
-        if len(pages) > MAX_IMAGES:
-            log.warning("Document has %d pages; reading the first %d", len(pages), MAX_IMAGES)
-        answer = vision_json([jpeg_bytes(p.img) for p in pages[:MAX_IMAGES]], extract_prompt(doc_type), schema,
-                             caller="extraction.extract", system=SYSTEM)
         all_lines = [ln for p in pages for ln in p.lines]
-        for name in schema.model_fields:
+        for name in FIELDS_BY_TYPE[doc_type]:
             # Models send null for a field that isn't printed, such as a missing date.
             r: Read = getattr(answer, name) or Read()
             value, evidence = typed(name, mask_text(r.value)), mask_text(r.evidence)
+            if name in confidence.PRINTED_FIELDS and isinstance(value, str):
+                value = confidence.snap_to_print(value, all_lines)
             conf, bbox = confidence.score(name, value, evidence, all_lines)
             if retry and value is not None and conf < RETRY_BELOW and bbox and name not in HELPER_FIELDS:
                 rr = _retry_field(_best_page(pages, value, evidence), doc_type, name, bbox)
@@ -140,7 +160,7 @@ def extract_pages(raw_pages: list[np.ndarray], doc_type: DocType | None = None, 
               for name, (v, e, c, b) in reads.items() if name not in HELPER_FIELDS and v is not None}
     if doc_type in ("income", "community"):
         # What the certificate's QR code says, for the doctor's tampering check.
-        qr = read_qr(raw_pages)
+        qr = read_qr(qr_pages)
         fields["qr_status"] = FieldRead(value=qr.status, confidence=1.0)
         for key, value in qr.values.items():
             fields[f"qr_{key}"] = FieldRead(value=value, confidence=1.0)
@@ -156,7 +176,7 @@ def extract_pages(raw_pages: list[np.ndarray], doc_type: DocType | None = None, 
 
 
 def extract_paths(paths: list[Path], doc_type: DocType | None = None, doc_id: str | None = None,
-                  retry: bool = True) -> DocResult:
+                  retry: bool | None = None) -> DocResult:
     """Multiple paths are pages of the same document."""
     return extract_pages([img for p in paths for img in preprocess.load_pages(Path(p))], doc_type, doc_id, retry)
 

@@ -83,10 +83,15 @@ def test_translate_retries_other_provider_when_tokens_dropped(env):
     assert body["provider"] == "sarvam"
 
 
-def test_translate_appends_terms_when_every_provider_drops_them(env):
-    with _client(Router({"bhashini": Fake("bhashini", drop_tokens=True)})) as c:
+def test_translate_falls_back_to_plain_text_when_every_provider_drops_tokens(env):
+    class Mangles(Fake):
+        async def translate(self, text, src, tgt):
+            self.calls += 1
+            return "income is 0." if "#0#" in text else f"[{tgt}] {text}"
+
+    with _client(Router({"bhashini": Mangles("bhashini")})) as c:
         r = c.post("/translate", json={"text": "Pay ₹500", "source": "en", "target": "ta"})
-    assert r.json()["text"] == "translated (₹500)"
+    assert r.json()["text"] == "[ta] Pay ₹500"     # never "income is 0." with the amount lost
 
 
 def test_tts_returns_contract_shape_and_logs_no_text(env, tmp_path):

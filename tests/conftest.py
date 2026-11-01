@@ -20,6 +20,11 @@ from app.main import create_app
 from app.plugins import Plugins
 from app.standins import StubBrowser, StubExtractor
 
+# Tests talk to fake LLMs, so the real per-minute pacing (common/pace.py) is off.
+# tests/test_pace.py sets its own limits.
+os.environ.setdefault("LLM_RPM", "0")
+os.environ.setdefault("LLM_TPM", "0")
+
 APP_SECRET = "test-secret"
 VERIFY_TOKEN = "test-verify-token"
 API_TOKEN = "test-api-token"

@@ -84,6 +84,8 @@ unmodelled:                     # criteria the engine can't test; shown as "also
 - Amounts go through `norm_amount` ("Rs. 2,50,000/-", "2.5 lakh"), communities
   through `norm_category` ("Most Backward Class" → `MBC`), states through a short
   alias list ("TN" → Tamil Nadu).
+- Tamil Nadu sub-categories count under their parent: BC Muslims (`BCM`) wherever a rule lists
+  `BC`, Arunthathiyars (`SCA`) wherever it lists `SC`. The rule's quoted clause is unchanged.
 - Core's community answers (`BC / MBC`, `SC / ST`, `General`) each stand for several
   categories; a rule passes only if every category in the group passes.
 - `questions.missing_questions(schemes, profile)` lists the unknown fields that

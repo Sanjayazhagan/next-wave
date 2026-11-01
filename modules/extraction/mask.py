@@ -1,9 +1,8 @@
-"""Redact Aadhaar and bank account numbers before anything is saved or sent to an LLM."""
+"""Black out Aadhaar and bank account numbers before anything is saved or sent to an LLM."""
 from __future__ import annotations
 
 import re
 
-import cv2
 import numpy as np
 
 from .ocr import OcrWord, union_box
@@ -14,12 +13,13 @@ _AADHAAR_TEXT = re.compile(r"(?<!\d)(\d{4})[\s\-]?(\d{4})[\s\-]?(\d{4})(?!\d)")
 _ACCOUNT_TEXT = re.compile(r"((?:a/?c|acc(?:oun)?t|acct|sb)\b[^\d]{0,15})(\d{5,14})(\d{4})(?!\d)", re.I)
 
 
-def _blur(img: np.ndarray, box: tuple[int, int, int, int], pad: int = 6) -> None:
+def _black_out(img: np.ndarray, box: tuple[int, int, int, int], pad: int = 8) -> None:
+    """A solid black box: unlike a blur, nothing of the digits survives for a model to recover."""
     x, y, w, h = box
     x0, y0 = max(0, x - pad), max(0, y - pad)
     x1, y1 = min(img.shape[1], x + w + pad), min(img.shape[0], y + h + pad)
     if x1 > x0 and y1 > y0:
-        img[y0:y1, x0:x1] = cv2.GaussianBlur(img[y0:y1, x0:x1], (51, 51), 0)
+        img[y0:y1, x0:x1] = 0
 
 
 def find_sensitive(words: list[OcrWord]) -> list[tuple[str, list[OcrWord]]]:
@@ -50,7 +50,7 @@ def find_sensitive(words: list[OcrWord]) -> list[tuple[str, list[OcrWord]]]:
 
 
 def redact(img: np.ndarray, words: list[OcrWord]) -> tuple[np.ndarray, dict[str, list[str]], list[OcrWord]]:
-    """Blur sensitive numbers on a copy.
+    """Black out sensitive numbers on a copy.
 
     Returns (image, {kind: [last4, ...]}, the OCR words that were not masked).
     """
@@ -58,7 +58,7 @@ def redact(img: np.ndarray, words: list[OcrWord]) -> tuple[np.ndarray, dict[str,
     last4s: dict[str, list[str]] = {}
     masked: set[int] = set()
     for kind, group in find_sensitive(words):
-        _blur(out, union_box([w.box for w in group]))
+        _black_out(out, union_box([w.box for w in group]))
         digits = "".join(w.text.replace("-", "") for w in group)
         last4s.setdefault(kind, []).append(digits[-4:])
         masked.update(id(w) for w in group)

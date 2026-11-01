@@ -178,13 +178,30 @@ BUILT_IN = {
     "hi": HINDI,
     **json.loads(_GENERATED.read_text(encoding="utf-8")),
 }
+
+
+def _rule_engine_tables() -> dict[str, dict[str, str]]:
+    """Tamil and Hindi for the rule engine's scheme questions, when that module is merged."""
+    try:
+        from modules.rules.translations import HINDI as RULES_HINDI
+        from modules.rules.translations import TAMIL as RULES_TAMIL
+    except Exception:  # Not merged, or failed to load: its questions stay in English.
+        return {}
+    return {"ta": RULES_TAMIL, "hi": RULES_HINDI}
+
+
+# Kept apart from BUILT_IN, which holds the same messages in every language.
+_LOOKUP = {
+    language: {**_rule_engine_tables().get(language, {}), **table}  # Core's own entries win.
+    for language, table in BUILT_IN.items()
+}
 _PLACEHOLDER = re.compile(r"\{\w+\}")
 _ESCAPED_PLACEHOLDER = re.compile(r"\\\{\w+\\\}")
 
 
 def translate_fixed(text: str, language: str) -> str:
     """Swap every known message inside `text`, longest first."""
-    table = BUILT_IN.get(language)
+    table = _LOOKUP.get(language)
     if table is None:
         return text
     for english in sorted(table, key=len, reverse=True):

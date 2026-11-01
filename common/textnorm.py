@@ -131,3 +131,19 @@ def strip_honorifics(name: str) -> str:
     while tokens and tokens[0].rstrip(".").casefold() in HONORIFICS:
         tokens = tokens[1:]
     return " ".join(tokens) if tokens else name
+
+
+_AMOUNT_IN_TEXT = re.compile(r"(?:₹|rs\.?|inr)?\s*(\d[\d,]*(?:\.\d+)?)\s*(lakhs?|lacs?|crores?|thousand|k)?\b", re.I)
+
+
+def one_amount(text: str) -> str | None:
+    """The rupee amount in a sentence ("Our income is ₹2,00,000.", "about 2 lakh"), as digits.
+
+    Only when the sentence holds exactly one number; "I'm 19 and we earn 2 lakh" returns None,
+    so the question is asked again rather than guessed at.
+    """
+    found = [m for m in _AMOUNT_IN_TEXT.finditer(text) if m.group(1).strip(",")]
+    if len(found) != 1:
+        return None
+    amount = norm_amount(found[0].group(0))
+    return str(amount) if amount is not None and 0 <= amount <= 100_000_000 else None

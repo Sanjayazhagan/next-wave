@@ -25,9 +25,10 @@ then the fallback is tried. If both fail, the reply is `503` with both errors.
   so without a hint it uses `STT_DEFAULT_LANG`.
 - `/tts` returns WAV. Core converts it to OGG/Opus for voice notes.
 - `/translate` keeps rupee amounts, dates, ID-like tokens and every `keep` term
-  intact: they are swapped for tokens `⟦0⟧, ⟦1⟧ ...` before translation and put
-  back afterwards. If a provider drops a token, the other provider is tried; if
-  both drop it, the original values are appended in brackets.
+  intact: they are swapped for tokens `#0#, #1# ...` before translation and put
+  back afterwards (`#0#` is the token style Sarvam leaves alone; `⟦0⟧` was mangled into a bare
+  "0"). If a provider drops a token, the other provider is tried; if both do, the plain text is
+  translated instead, so an amount is never lost.
 - Language codes are ISO 639-1 (`ta`, `en`, `hi` ...), the same as core.
 - Logs (`$LOG_DIR/language.jsonl`) hold operation, provider, latency and input
   length only, never the text or audio.
@@ -56,6 +57,24 @@ docker run --env-file .env -p 8081:8081 gz-language
 
 `compose_snippet.yml` has the service block for the main compose file.
 
+### Deploy on Railway (next to the core API)
+
+1. In the Railway project: **New service → GitHub repo** (this repo), name it `language`.
+2. Service **Settings → Config-as-code**: `modules/language/railway.toml` (builds
+   `modules/language/Dockerfile` from the repo root, health check `/health`).
+3. Service **Variables**: `SARVAM_API_KEY` (and the `BHASHINI_*` three if used),
+   `LANG_PRIMARY=sarvam` while Bhashini isn't configured. Railway sets `PORT`.
+4. **Settings → Networking**: generate a domain, or use the private address
+   `http://language.railway.internal:<PORT>`.
+5. On the **core API** service, set `LANGUAGE_SERVICE_URL` to that address and redeploy.
+6. Check: `curl https://<domain>/health` shows `"sarvam": {"configured": true, ...}`, and the
+   core's `uv run python -m scripts.check_integration` shows the language service READY.
+
+This service never calls Groq, so it doesn't need the core's shared LLM pacing.
+
+Tested 1 Nov 2026: the image builds and runs locally; `/health` answers and a same-language
+request works. A real translation answers 503 until a valid Sarvam key is set.
+
 ## Environment
 
 | Variable | Purpose |
@@ -75,13 +94,17 @@ docker run --env-file .env -p 8081:8081 gz-language
 Put a few real Telegram voice notes in `fixtures/voice/*.ogg` (git-ignored), then:
 
 ```bash
-uv run python scripts/compare_stt.py
+uv run python -m scripts.compare_stt
 ```
 
 It prints each provider's transcript and latency per file, including Sarvam's
 `codemix` mode, which writes English words in Latin script.
 
-Decision: [[NUMBER: STT_PRIMARY choice after compare_stt.py]]
+Decision (1 Nov 2026): **`STT_PRIMARY=sarvam` with `SARVAM_STT_MODE=codemix`**, and
+`LANG_PRIMARY=sarvam` while Bhashini isn't configured. On three Tamil voice notes (made with
+Sarvam's text-to-speech, so cleaner than real phone audio), code-mix mode wrote English words in
+English ("Scholarship apply பண்ணணும்", "BE முதல் ஆண்டு") and amounts as digits ("₹2,00,000"),
+and was faster (130-480 ms). Recheck with real voice notes when you have them.
 
 ## Provider docs used
 
