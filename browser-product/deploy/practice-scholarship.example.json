@@ -1,0 +1,6 @@
+{
+  "scholarship_practice": {
+    "url": "https://YOUR-BROWSER-HOST/practice/scholarship",
+    "receipt_pattern": "Receipt: (DEMO-SCH-[A-F0-9]{12}-[A-F0-9]{32})"
+  }
+}

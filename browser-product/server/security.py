@@ -63,6 +63,8 @@ def identity(request):
 
 
 def enforce(request):
+    if request.url.path=='/practice/scholarship' or request.url.path.startswith('/practice/scholarship/'):
+        return None  # Explicit fictional, stateless practice form; core APIs remain authenticated.
     from server import app
     if os.getenv('SECURITY_MODE', 'local-demo') != 'signed':
         return None
