@@ -22,9 +22,9 @@ AUTHORITY = {"annual_income": "income", "community": "community"}
 
 
 def _finding(check: str, kind: str, field: str | None, severity: Severity, detail: str, fix: str,
-             values: dict[str, str] | None = None) -> Finding:
+             values: dict[str, str] | None = None, document: str | None = None) -> Finding:
     return Finding(check=check, kind=kind, field=field, severity=severity, points=POINTS[severity], detail=detail,
-                   fix=fix, values_by_doc=values or {})
+                   fix=fix, values_by_doc=values or {}, document=document)
 
 
 def parent_held(docs: list[ExtractedDocument]) -> set[int]:
@@ -111,7 +111,7 @@ def eligibility_recheck(profile: Profile, scheme) -> list[Finding]:
     m = match(scheme, verified_profile(profile))
     if m.status == "not_eligible":
         r = next(r for r in m.results if r.status == "fail")
-        reason = f'your {r.field.replace("_", " ")} is {r.actual}, and the rule needs {r.expected} ("{r.clause.text}").'
+        reason = f'your {msg.label(r.field)} is {r.actual}, and the rule needs {r.expected} ("{r.clause.text}").'
         return [_finding("eligibility_recheck", "eligibility", r.field, "blocker", explain(m),
                          msg.not_eligible(m.name, reason))]
     if m.status == "needs_info":
@@ -119,7 +119,7 @@ def eligibility_recheck(profile: Profile, scheme) -> list[Finding]:
         if any(r.field == "community" and r.actual == "OBC" for r in unknown):
             return [_finding("eligibility_recheck", "eligibility", "community", "medium", explain(m),
                              msg.state_community(m.name))]
-        fields = sorted({r.field.replace("_", " ") for r in unknown})
+        fields = sorted({msg.label(r.field) for r in unknown})
         return [_finding("eligibility_recheck", "eligibility", None, "medium", explain(m), msg.needs_info(m.name, fields))]
     return []
 
@@ -153,7 +153,8 @@ def file_spec(prepared: dict[str, PreparedFile], specs: dict[str, DocSpec]) -> l
             problems.append(f"is {pf.size_kb:.0f} KB, under the {spec.min_kb} KB minimum")
         if not pf.legible:
             problems.append("may be hard to read after compressing")
-        out += [_finding("file_spec", "file_spec", doc_type, "medium", p, msg.file_spec(doc_type, p)) for p in problems]
+        out += [_finding("file_spec", "file_spec", None, "medium", p, msg.file_spec(doc_type, p), document=doc_type)
+                for p in problems]
     return out
 
 
@@ -163,7 +164,8 @@ def image_quality(quality_by_doc: dict[str, dict]) -> list[Finding]:
     for doc_type, q in quality_by_doc.items():
         for flag, word in (("too_blurry", "blurry"), ("too_dark", "too dark")):
             if q.get(flag):
-                out.append(_finding("image_quality", "quality", doc_type, "medium", word, msg.quality(doc_type, word)))
+                out.append(_finding("image_quality", "quality", None, "medium", word, msg.quality(doc_type, word),
+                                    document=doc_type))
     return out
 
 
@@ -202,13 +204,13 @@ def authenticity(docs: list[ExtractedDocument]) -> list[Finding]:
                 detail = "; ".join(f"{k}: QR says '{q}', printed '{p}'" for k, (q, p) in problems.items())
                 out.append(_finding("authenticity", "validity", "certificate_number", "blocker",
                                     f"QR code doesn't match the printed certificate ({detail})",
-                                    msg.tampered(d.document_type, problems)))
+                                    msg.tampered(d.document_type, problems), document=d.document_type))
         elif status == "unreadable" and E_DISTRICT_NO.match(printed_no or ""):
             out.append(_finding("authenticity", "validity", None, "low", "QR code found but not readable",
-                                msg.qr_unreadable(d.document_type, printed_no)))
+                                msg.qr_unreadable(d.document_type, printed_no), document=d.document_type))
         elif status == "absent" and E_DISTRICT_NO.match(printed_no or ""):
             out.append(_finding("authenticity", "validity", None, "medium", "no QR code on an e-District certificate",
-                                msg.qr_missing(d.document_type)))
+                                msg.qr_missing(d.document_type), document=d.document_type))
     return out
 
 
@@ -222,13 +224,13 @@ def date_validity(docs: list[ExtractedDocument], today: date | None = None) -> l
         expiry = norm_date(until.value) if until else None
         if expiry and expiry < today:
             out.append(_finding("date_validity", "validity", "valid_until", "high", f"expired on {expiry.isoformat()}",
-                                msg.expired(d.document_type, expiry)))
+                                msg.expired(d.document_type, expiry), document=d.document_type))
         raw = d.fields.get("issue_date")
         issued = norm_date(raw.value) if raw else None
         if issued is None:
             out.append(_finding("date_validity", "validity", "issue_date", "low", "issue date not found",
-                                msg.validity(d.document_type, "could not be read")))
+                                msg.validity(d.document_type, "could not be read"), document=d.document_type))
         elif issued > today:
             out.append(_finding("date_validity", "validity", "issue_date", "low", "issue date in the future",
-                                msg.validity(d.document_type, "is in the future")))
+                                msg.validity(d.document_type, "is in the future"), document=d.document_type))
     return out

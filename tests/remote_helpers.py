@@ -28,3 +28,35 @@ def live_env(monkeypatch):
 
     for k, v in dotenv_values().items():
         monkeypatch.setenv(k, v)
+
+
+@pytest.fixture(scope="module")
+def real_language_url():
+    """The real language service (Sarvam), in its own process on a free port. Live tests only."""
+    import os
+    import socket
+    import subprocess
+    import sys
+    import time
+
+    import httpx
+
+    from common.config import dotenv_values
+
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    env = {**os.environ, **dotenv_values(), "LANG_PRIMARY": "sarvam", "STT_PRIMARY": "sarvam",
+           "SARVAM_STT_MODE": "codemix"}
+    proc = subprocess.Popen([sys.executable, "-m", "uvicorn", "modules.language.app:app", "--port", str(port)],
+                            env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    url = f"http://127.0.0.1:{port}"
+    for _ in range(60):
+        try:
+            if httpx.get(f"{url}/health", timeout=1).status_code == 200:
+                break
+        except httpx.HTTPError:
+            time.sleep(0.5)
+    yield url
+    proc.terminate()
+    proc.wait(timeout=10)

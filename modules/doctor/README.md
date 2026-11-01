@@ -56,5 +56,18 @@ An income certificate issued in a parent's name (its holder matches the father's
 name on another document) is normal: it still counts for income, but it is left out
 of the name and father's-name comparisons.
 
-Fix messages (`messages.py`) are English; core translates them. They never
-include Aadhaar or bank numbers: those fields are never compared.
+## What the user sees
+
+Each finding becomes a `Mismatch` with a readable heading ("Income certificate", "Name",
+"Eligibility", never a raw name like `valid_until`) and one fix sentence, in the chat's
+language (`DoctorRequest.language`, which core fills in):
+
+- Headings for Tamil and Hindi come from a fixed table (`localize.py`).
+- Fix sentences go through the language service (`LANGUAGE_SERVICE_URL`). Quoted names,
+  scheme names, certificate numbers, dates, amounts and links are kept out of translation,
+  so they arrive unchanged. Checked live with Sarvam in Tamil and Hindi.
+- With no language service, or if it fails, the readable English is shown.
+
+The sentences are worded to translate well ("an OBC certificate from the Government of
+India", since "central OBC" came back in Tamil as "important OBC"). They never include
+Aadhaar or bank numbers: those fields are never compared.
