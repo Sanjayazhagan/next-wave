@@ -41,6 +41,8 @@ class TelegramChannel:
         text = prompt["text"]
         if not prompt.get("localized"):
             text = await self._localize(session, text)
+        if prompt.get("link"):  # Added after translation, so the private link stays with us.
+            text = f"{text}\n\n{prompt['link']}"
         buttons = prompt.get("buttons")
         if not buttons:
             await self._client.send_text(chat_id, text)

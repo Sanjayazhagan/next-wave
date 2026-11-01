@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     # Stays off unless the applicant genuinely qualifies. When off, the agent
     # stops at the review page and never presses final submit.
     allow_real_submit: bool = False
+    # When real submit is off, sends a one-time link so the user presses Submit themselves.
+    submit_link: bool = False
     final_submit_pattern: str = (
         r"\b(final\s+submit|submit\s+application|submit|pay(ment)?|e-?sign)\b"
     )

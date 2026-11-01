@@ -109,5 +109,17 @@ class BridgeBrowserWorker:
             },
         )
 
+    async def human_link(self, session_id: str, reason: str, **review: Any) -> str:
+        """A short-lived private link where the user does this step on the live page."""
+        data = await self._json(
+            "POST", f"/session/{session_id}/human-task", json={"reason": reason, **review}
+        )
+        if not data.get("assistance_url"):
+            raise BrowserError("Browser service gave no link")
+        return data["assistance_url"]
+
+    async def human_status(self, session_id: str) -> dict[str, Any]:
+        return await self._json("GET", f"/session/{session_id}/human-task")
+
     async def close(self, session_id: str) -> None:
         await self._request("DELETE", f"/session/{session_id}")

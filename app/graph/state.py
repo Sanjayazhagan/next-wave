@@ -49,6 +49,7 @@ class AgentState(TypedDict, total=False):
     strikes: int
     challenge: dict[str, Any] | None
     challenge_tries: int
+    link: dict[str, Any] | None
     missing_field: str | None
     handover_reason: str | None
 

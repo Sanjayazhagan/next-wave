@@ -63,6 +63,12 @@ class Deps:
     events: EventLog
     sessions: SessionStore
 
+LINK_DELIVERY = "human_assistance_link"
+LINK_OPEN_STATES = ("offering", "active", "completing")
+LINK_UNUSED_STATES = ("review_changed", "expired", "rejected", "cancelled")
+FORM_ROLES = ("textbox", "spinbutton", "combobox", "searchbox")
+REDACTED = "[redacted]"
+
 
 def ask(
     kind: str,
@@ -70,6 +76,7 @@ def ask(
     buttons: dict[str, str] | None = None,
     image_ref: str | None = None,
     localized: bool = False,
+    link: str | None = None,
 ) -> dict[str, Any]:
     """Pause the graph until the user replies. Button ids carry the prompt kind.
 
@@ -81,6 +88,8 @@ def ask(
         "image_ref": image_ref,
         "localized": localized,
     }
+    if link:
+        prompt["link"] = link
     if buttons:
         prompt["buttons"] = {f"{kind}:{id_}": title for id_, title in buttons.items()}
     return interrupt(prompt)
@@ -93,6 +102,18 @@ def chosen(reply: dict[str, Any]) -> str | None:
 
 def typed(reply: dict[str, Any]) -> str:
     return str(reply.get("text", "")).strip()
+
+
+def page_values(snapshot: Snapshot) -> list[str]:
+    """What the form itself holds, for pages where no field was tracked by name."""
+    filled = [
+        node for node in snapshot.nodes
+        if node.role in FORM_ROLES and node.value and node.value != REDACTED
+    ]
+    return [
+        f"{number}. {node.name}: {mask_for_display(node.name, node.value)}"
+        for number, node in enumerate(filled, start=1)
+    ]
 
 
 def profile_of(state: AgentState) -> Profile:
@@ -476,6 +497,8 @@ class Nodes:
         tries = state.get("challenge_tries", 0) + 1
         if tries > MAX_STRIKES:
             return self._handover(f"{challenge.kind} failed {MAX_STRIKES} times")
+        if challenge.kind == "captcha" and challenge.delivery_mode == LINK_DELIVERY:
+            return {"route": "human_link", "challenge_tries": tries}
         image_ref = None
         if challenge.image_base64:
             image_ref = self.d.files.put(base64.b64decode(challenge.image_base64), "image/png")
@@ -484,7 +507,7 @@ class Nodes:
             "challenge_tries": tries,
             "challenge": {
                 "kind": challenge.kind,
-                "input": challenge.input.model_dump(),
+                "input": challenge.input.model_dump() if challenge.input else None,
                 "submit": challenge.submit.model_dump() if challenge.submit else None,
                 "image_ref": image_ref,
             },
@@ -673,6 +696,40 @@ class Nodes:
             return {**self._strike(state, str(exc)), "challenge": None}
         return {"challenge": None, "route": "again"}
 
+    async def human_link(self, state: AgentState) -> dict[str, Any]:
+        try:
+            url = await self.d.browser.human_link(state["browser_session"], "captcha")
+        except BrowserError as exc:
+            return self._strike(state, str(exc))
+        return {"route": "human_wait", "link": {"reason": "captcha", "url": url}}
+
+    async def human_wait(self, state: AgentState) -> dict[str, Any]:
+        """The user acts on the live page; on Done the bridge says what really happened."""
+        link = state["link"]
+        is_submit = link["reason"] == "submit"
+        text = messages.SUBMIT_LINK if is_submit else messages.CAPTCHA_LINK
+        ask("human_link", text, {"done": "Done"}, link=link["url"])
+        try:
+            status = await self.d.browser.human_status(state["browser_session"])
+        except BrowserError:
+            status = {}
+        task_state = status.get("state")
+        if task_state in LINK_OPEN_STATES:
+            return {"route": "human_wait"}
+        if not is_submit:
+            return {"route": "again", "link": None}
+        if task_state == "completed" and status.get("receipt_number"):
+            return {"route": "receipt", "receipt_number": status["receipt_number"], "link": None}
+        if task_state in LINK_UNUSED_STATES:
+            return {
+                "route": "stop",
+                "outcome": "stopped_at_review",
+                "link": None,
+                "final": {"text": messages.SUBMIT_LINK_ENDED},
+            }
+        # Possibly submitted: never offer a second click.
+        return {**self._handover(messages.SUBMIT_UNCERTAIN), "link": None}
+
     async def ask_field(self, state: AgentState) -> dict[str, Any]:
         # A fixed sentence, so a hostile page cannot word the question via the model.
         field = state["missing_field"]
@@ -724,6 +781,8 @@ class Nodes:
             f"{number}. {details['label']}: {mask_for_display(field, known.get(field, ''))}"
             for number, (field, details) in enumerate(filled.items(), start=1)
         ]
+        if not lines:
+            lines = page_values(snapshot)
         report = state.get("doctor_report")
         if report and report["mismatches"]:
             lines.append(f"\n{messages.REVIEW_FLAGS}")
@@ -782,6 +841,8 @@ class Nodes:
 
     async def submit(self, state: AgentState) -> dict[str, Any]:
         owner = state["owner"]
+        if not self.d.settings.allow_real_submit and self.d.settings.submit_link:
+            return await self._offer_submit_link(state)
         if not self.d.settings.allow_real_submit:
             lines = [messages.STOPPED_AT_REVIEW]
             lines += [
@@ -819,6 +880,26 @@ class Nodes:
         if not snapshot.receipt_number:
             return self._handover(messages.SUBMIT_UNCERTAIN)
         return {"route": "receipt", "receipt_number": snapshot.receipt_number}
+
+    async def _offer_submit_link(self, state: AgentState) -> dict[str, Any]:
+        if not self.d.sessions.claim_submit(state["session_id"]):
+            return self._handover(messages.SUBMIT_UNCERTAIN)
+        browser_session = state["browser_session"]
+        try:
+            snapshot = await self.d.browser.snapshot(browser_session)
+            button = self.d.planner.find_final_submit(snapshot)
+            if button is None:
+                return self._handover("Could not find the final submit button")
+            url = await self.d.browser.human_link(
+                browser_session,
+                "submit",
+                review_observation_id=snapshot.observation_id,
+                approval_ref=f"approval-{state['session_id']}-{snapshot.observation_id}",
+                target_ref=button.ref,
+            )
+        except BrowserError as exc:
+            return self._handover(f"Could not make the submit link: {exc}")
+        return {"route": "human_wait", "link": {"reason": "submit", "url": url}}
 
     async def receipt(self, state: AgentState) -> dict[str, Any]:
         scheme = state.get("scheme") or {}

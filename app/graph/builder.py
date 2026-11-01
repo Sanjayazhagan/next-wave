@@ -18,7 +18,8 @@ def build_graph(deps: Deps, checkpointer: BaseCheckpointSaver) -> Any:
         "confirm_details", "fix_details",
         "collect_documents", "extract_profile", "match_schemes", "ask_scheme_question",
         "choose_scheme", "doctor", "prepare_portal",
-        "portal_login", "browser_step", "challenge", "ask_field", "handover",
+        "portal_login", "browser_step", "challenge", "human_link", "human_wait",
+        "ask_field", "handover",
         "save_skill", "prepare_review", "review", "edit", "submit", "receipt",
         "finish",
     ):
@@ -75,6 +76,8 @@ def build_graph(deps: Deps, checkpointer: BaseCheckpointSaver) -> Any:
             "login": "portal_login",
             "reopen": "prepare_portal",
             "challenge": "challenge",
+            "human_link": "human_link",
+            "human_wait": "human_wait",
             "ask_field": "ask_field",
             "handover": "handover",
             "reached_review": "save_skill",
@@ -93,7 +96,7 @@ def build_graph(deps: Deps, checkpointer: BaseCheckpointSaver) -> Any:
 
     route_targets = [
         "browser_step", "portal_login", "prepare_portal", "challenge", "ask_field",
-        "handover", "save_skill", "receipt", "finish",
+        "handover", "save_skill", "receipt", "finish", "human_link", "human_wait",
     ]
 
     graph.add_edge(START, "choose_language" if deps.settings.choose_language else "consent")
@@ -127,7 +130,10 @@ def build_graph(deps: Deps, checkpointer: BaseCheckpointSaver) -> Any:
     )
     graph.add_conditional_edges("extract_profile", after_extraction, ["doctor", "prepare_portal"])
     graph.add_edge("doctor", "prepare_portal")
-    for name in ("prepare_portal", "portal_login", "browser_step", "challenge", "handover", "submit"):
+    for name in (
+        "prepare_portal", "portal_login", "browser_step", "challenge", "handover", "submit",
+        "human_link", "human_wait",
+    ):
         graph.add_conditional_edges(name, by_route, route_targets)
     graph.add_conditional_edges("ask_field", after_field, ["ask_field", "browser_step"])
     graph.add_edge("save_skill", "prepare_review")

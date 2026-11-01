@@ -41,8 +41,9 @@ class PageNode(BaseModel):
 
 class Challenge(BaseModel):
     kind: Literal["captcha", "otp"]
-    input: Target
+    input: Target | None = None  # A CAPTCHA widget may have no text box.
     submit: Target | None = None
+    delivery_mode: str | None = None  # "human_assistance_link": the user does it on a link.
     # Crop this to the CAPTCHA alone: it is sent to the user over WhatsApp.
     image_base64: str | None = None
 

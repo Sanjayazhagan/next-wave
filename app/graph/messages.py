@@ -65,6 +65,12 @@ REVIEW_FLAGS = "Please check:"
 NO_SCHEME = "I could not find a scheme you qualify for right now."
 NO_PORTAL = "No portal is set up for this scheme yet, so I have to stop here."
 PORTAL_ID = "What is your login ID on this portal?"
+CAPTCHA_LINK = "The portal needs a security check. Open this private link, finish it yourself, then press Done."
+SUBMIT_LINK = (
+    "Open this private link, check your form and press Submit yourself. It works once, "
+    "for 10 minutes. Then press Done."
+)
+SUBMIT_LINK_ENDED = "That link can no longer be used, and no submission was confirmed."
 CAPTCHA = "The portal is showing this security image. Please reply with the text in it."
 OTP = "The portal sent an OTP to your phone. Please reply with it."
 HANDOVER = "I'm having trouble with this step, so a helper will take over. You don't need to do anything."
