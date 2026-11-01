@@ -15,7 +15,7 @@ def test_findings_arrive_in_tamil_with_names_and_numbers_intact(real_language_ur
     docs = [ExtractedDocument(document_type=t, file_ref=t, fields={
         k: ProfileField(value=v, source_document=t, confidence=1.0) for k, v in f.items()})
         for t, f in [("marksheet", {"full_name": "SATYAJIT S"}),
-                     ("income", {"full_name": "Satyajit", "certificate_number": "TN-4202402207792",
+                     ("income", {"full_name": "Satyajit", "certificate_number": "TN-0000000000000",
                                  "issue_date": "2024-02-27", "valid_until": "2025-02-26"})]]
     resp = check_application(DoctorRequest(profile=Profile(), documents=docs, language="ta"))
     text = " ".join(f"{m.field} {m.detail}" for m in resp.mismatches)

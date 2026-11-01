@@ -12,6 +12,4 @@ Never show a real Aadhaar, phone, bank number, OTP or password.
 | 1:15–1:45 | Web app: browser logs in (OTP typed in Telegram), fills the form live; CAPTCHA arrives on Telegram, she replies | "It fills the portal itself. CAPTCHA and OTP go to her; it never bypasses them." |
 | 1:45–2:10 | Judge presses the chaos button: a label renames; the agent fails, reasons, finds the field, continues | "Portals change. Here we break the page on purpose. It notices, repairs, and carries on." |
 | 2:10–2:30 | Review screenshot on Telegram; one edit; Approve; receipt as a Tamil voice note | "Nothing is submitted until she approves. The receipt comes back in Tamil." |
-| 2:30–2:45 | Second run in replay mode with a timer; benchmark chart | "The second time, it replays what it learned: [[NUMBER]] seconds. Others explain schemes. We apply for them." |
-
-[[GIF: cut 0:15–0:55 for the README]]
+| 2:30–2:45 | Second run in replay mode with a timer; benchmark chart | "The second time, it replays what it learned, and the timer shows how long that took. Others explain schemes. We apply for them." |
