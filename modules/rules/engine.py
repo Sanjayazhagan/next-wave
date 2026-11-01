@@ -11,6 +11,9 @@ from .models import Clause, Rule, RuleResult, Scheme, SchemeMatch
 
 NUMERIC_OPS = {"lt", "lte", "gt", "gte", "between"}
 STATE_BACKWARD = {"BC", "BCM", "MBC", "DNC"}
+# Tamil Nadu sub-categories: BC Muslims have an internal share of the Backward Classes quota, and
+# Arunthathiyars of the Scheduled Castes quota. A rule that lists the parent includes them.
+PARENT = {"BCM": "BC", "SCA": "SC"}
 _GENDER = {"female": {"female", "f", "girl", "woman", "pen", "பெண்"}, "male": {"male", "m", "boy", "man", "aan", "ஆண்"},
            "transgender": {"transgender", "third gender", "other"}}
 _STATES = {"tn": "tamil nadu", "tamilnadu": "tamil nadu", "tamil nadu": "tamil nadu", "தமிழ்நாடு": "tamil nadu",
@@ -76,13 +79,16 @@ def _norm_expected(field: str, v: object) -> str:
 def _test_one(rule: Rule, actual: str) -> bool:
     exp = rule.value
     if rule.op == "eq":
-        return actual == _norm_expected(rule.field, exp)
+        want = _norm_expected(rule.field, exp)
+        return actual == want or (rule.field == "community" and PARENT.get(actual) == want)
     if rule.op == "ne":
         return actual != _norm_expected(rule.field, exp)
     if rule.op == "in":
-        return actual in {_norm_expected(rule.field, v) for v in exp}
+        listed = {_norm_expected(rule.field, v) for v in exp}
+        return actual in listed or (rule.field == "community" and PARENT.get(actual) in listed)
     if rule.op == "not_in":
-        return actual not in {_norm_expected(rule.field, v) for v in exp}
+        listed = {_norm_expected(rule.field, v) for v in exp}
+        return actual not in listed and not (rule.field == "community" and PARENT.get(actual) in listed)
     if rule.op == "contains_any":
         return any(norm_text(str(v)) in actual for v in exp)
     raise ValueError(rule.op)

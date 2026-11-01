@@ -21,8 +21,10 @@ FIELD_KEYS = [
 
 # Core's community answers ("BC / MBC", "SC / ST", "General", or the button ids) each
 # stand for a group of categories. Keys are compared after norm_text.
+# "BC / MBC" is a Tamil Nadu answer, so it means the state's backward categories; a central OBC
+# certificate is a separate label and is handled in the rule engine.
 COMMUNITY_BUTTONS = {
-    "bc / mbc": {"BC", "BCM", "MBC", "DNC", "OBC"},
+    "bc / mbc": {"BC", "BCM", "MBC", "DNC"},
     "sc / st": {"SC", "SCA", "ST"},
     "general": {"OC", "GEN", "EWS"},
 }
