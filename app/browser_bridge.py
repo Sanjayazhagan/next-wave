@@ -4,6 +4,7 @@ This is the mode for live pages. The bridge reads the page as it is, leaves logi
 OTP and CAPTCHA to the user, and clicks a final submit only with an approval tied to
 the exact review page the user saw.
 """
+import uuid
 from typing import Any
 
 import httpx
@@ -86,7 +87,7 @@ class BridgeBrowserWorker:
         return self._snapshot(await self._json("GET", f"/session/{session_id}/snapshot"))
 
     async def act(self, session_id: str, action: Action) -> ActionResult:
-        body = action.model_dump(exclude_none=True)
+        body = {**action.model_dump(exclude_none=True), "action_id": str(uuid.uuid4())}
         if action.type == "upload" and action.target:
             body["target"]["role"] = BRIDGE_FILE_ROLE
         response = await self._request("POST", f"/session/{session_id}/action", json=body)
