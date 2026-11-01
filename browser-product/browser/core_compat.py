@@ -21,7 +21,7 @@ from fastapi import APIRouter, Header, HTTPException
 from playwright.async_api import TimeoutError as PWTimeout, Error as PWError
 from pydantic import BaseModel, Field
 
-from browser.general import GeneralContext, observe, act, origin, signature, intermediate_post_permitted, bound_tabs, target_signature, watch_navigation, retain_private_value, lock_guard
+from browser.general import GeneralContext, observe, act, origin, signature, intermediate_post_permitted, bound_tabs, target_signature, watch_navigation, retain_private_value, lock_guard, resolve_target
 from browser.step_policy import category, final_path
 from browser.public_web import navigation_mode, NAV_MODE_PUBLIC, assert_public_url
 from browser.general_routes import contexts
@@ -87,6 +87,9 @@ class BridgeSession:
     human_reason: str = 'other'
     human_task_id: str | None = None
     human_expires: float = 0.0
+    submit_review: dict | None = None
+    human_result_task_id: str | None = None
+    human_result: dict | None = None
     otp_sent: int = 0
     otp_window: float = 0.0
     otp_verify_count: int = 0
@@ -182,7 +185,20 @@ def challenge_info(obs, nodes):
                     if role_of(candidate)=='button' and re.search(r'verify|continue|check|sign in|login',label,re.I):
                         submit = {'role':'button','name':nodes[candidate['ref']]}
                         break
-                return {'kind':kind,'input':input_target,'submit':submit}
+                # Telegram must not be sent a whole-page or stale cropped image.
+                # Citizen verification uses a separately issued, short-lived
+                # capability link to this *same* live browser session.
+                return {'kind':kind,'input':input_target,'submit':submit,
+                        'image_base64':None,'delivery_mode':'human_assistance_link',
+                        'human_task_reason':kind,'requires_human':True}
+    # Some CAPTCHA widgets (for example an iframe checkbox) have no page-level
+    # editable input. Still expose a challenge so the agent can request the
+    # human link instead of proceeding or looking for a nonexistent image.
+    if (any(e.get('category')=='captcha_widget' for e in obs.get('elements',[]))
+            or any(signal.get('kind')=='challenge_frame' for signal in obs.get('human_signals',[]))):
+        return {'kind':'captcha','input':None,'submit':None,
+                'image_base64':None,'delivery_mode':'human_assistance_link',
+                'human_task_reason':'captcha','requires_human':True}
     return None
 
 
@@ -212,7 +228,7 @@ def convert(obs, info):
                        # updated core can use them for rigorous upload checks.
                        'element_type':e.get('type',''),
                        'options':e.get('options',[]),'checked':e.get('checked',False),
-                       'selected':e.get('selected',False),'expanded':e.get('expanded'),'controls':e.get('controls',''),'overlay_id':e.get('overlay_id'),
+                       'selected':e.get('selected',False),'expanded':e.get('expanded'),'controls':e.get('controls',''),'overlay_id':e.get('overlay_id'),'occluded':e.get('occluded',False),'blocker':e.get('blocker'),'requires_scroll':e.get('requires_scroll',False),
                        'disabled':e.get('disabled',False),'readonly':e.get('readonly',False),
                        'href':e.get('href',''),'link_target':e.get('link_target',''),
                        'validation_message':e.get('validation_message',''),
@@ -233,7 +249,7 @@ def convert(obs, info):
     # Core should NEVER forward the unproven screenshot to WhatsApp.
     return {'url':obs['url'],'title':obs['title'],'nodes':output,
             'page_text':obs.get('text','')[:3500],
-            'interaction_state':obs.get('interaction_state',{}),'tabs':obs.get('tabs',[]),'coverage':obs.get('coverage',{}),
+            'consent_required':obs.get('consent_required',False),'interaction_state':obs.get('interaction_state',{}),'tabs':obs.get('tabs',[]),'coverage':obs.get('coverage',{}),
             'page_status':obs.get('page_status','ready'),'http_status':obs.get('http_status'),
             'human_signals':obs.get('human_signals',[]),'needs_reconciliation':bool(info.uncertain_action),
             'observation_truncated':bool(obs.get('truncated',False)),
@@ -422,7 +438,8 @@ async def action_locked(sid,req,info,ctx):
     e=next((x for x in observation['elements'] if x['ref']==e_ref),None)
     if req.target and (not e or (req.target.name != identify(e) and not (req.target.name.startswith(str(identify(e))+' [') and re.fullmatch(r' \[\d+\]',req.target.name[len(str(identify(e))):])))):
         raise HTTPException(409,'Target changed; re-plan using a new snapshot')
-    kind={'click':'click','type':'fill','fill':'fill','upload':'upload','wait':'wait','navigate':'navigate','select':'select','check':'check','back':'back','scroll':'scroll','switch_tab':'switch_tab'}.get(req.type)
+    if e:ctx.targets[e_ref]=await resolve_target(ctx,e)
+    kind={'click':'click','type':'fill','fill':'fill','upload':'upload','wait':'wait','navigate':'navigate','select':'select','check':'check','back':'back','scroll':'scroll','switch_tab':'switch_tab','blur':'blur'}.get(req.type)
     if not kind:raise HTTPException(422,'Unsupported core action')
     if req.type=='type' and e and e['tag']=='select':kind='select'
     if req.type=='click' and e and e.get('type') in ('checkbox','radio'):
@@ -578,9 +595,12 @@ async def challenge_regions(ctx):
 
 
 class HumanBegin(BaseModel):
-    reason: str = Field(default='other',pattern=r'^(otp|captcha|login|upload|verification|other)$')
+    reason: str = Field(default='other',pattern=r'^(otp|captcha|login|upload|verification|submit|other)$')
     task_id: str = Field(min_length=8,max_length=100)
     expires_at: float | None = None
+    review_observation_id: str | None = Field(default=None,min_length=8,max_length=100)
+    approval_ref: str | None = Field(default=None,min_length=8,max_length=200)
+    target_ref: str | None = Field(default=None,max_length=100)
 
 class HumanAction(BaseModel):
     observation_id: str | None = None
@@ -593,7 +613,7 @@ class HumanAction(BaseModel):
 
 
 def release_human(info,ctx):
-    info.human_task_id=None;info.human_expires=0.0;ctx.human_captcha_until=0.0
+    info.human_task_id=None;info.human_expires=0.0;ctx.human_captcha_until=0.0;ctx.human_lease_until=0
     info.auth_value_entered=False;info.auth_ref=None
 
 def expire_human(info,ctx):
@@ -615,7 +635,7 @@ async def human_status(sid:str,x_internal_key:str|None=Header(None)):
     info,ctx=get(sid)
     async with lock_guard(ctx.lock):
         expire_human(info,ctx)
-        return {'state':'active' if info.human_task_id else 'none','task_id':info.human_task_id,
+        return {'state':'active' if info.human_task_id else (info.human_result or {}).get('state','none'),'task_id':info.human_task_id or info.human_result_task_id,'result':info.human_result,
                 'expires_at':info.human_expires,'needs_reconciliation':bool(info.uncertain_action)}
 
 @router.post('/session/{sid}/human-begin')
@@ -627,10 +647,14 @@ async def human_begin(sid:str,req:HumanBegin,x_internal_key:str|None=Header(None
         expire_human(info,ctx)
         if info.human_task_id:raise HTTPException(409,'Session already assigned to a human')
         if req.expires_at and not time.time()<req.expires_at<=time.time()+601:raise HTTPException(422,'Human task expiry must be within 600 seconds')
+        if req.reason=='submit':
+            from browser.human_submit import prepare
+            await prepare(info,ctx,req)
         info.human_reason=req.reason
         info.human_task_id=req.task_id
-        info.human_expires=req.expires_at or (time.time()+300)
-        ctx.human_captcha_until=info.human_expires
+        info.human_expires=req.expires_at or (time.time()+(600 if req.reason=='submit' else 300))
+        ctx.human_lease_until=info.human_expires
+        ctx.human_captcha_until=info.human_expires if req.reason!='submit' else 0
     return {'state':'paused_for_human'}
 
 
@@ -640,6 +664,9 @@ async def human_view(sid:str,req:HumanBegin,x_internal_key:str|None=Header(None)
     info,ctx=get(sid);ensure_human(info,req.task_id)
     async with lock_guard(ctx.lock):
         ensure_human(info,req.task_id)
+        if info.human_reason=='submit':
+            from browser.human_submit import view
+            return await view(info,ctx)
         obs=await observe(ctx)
         # Filter to controls useful for manual verification only. No raw OTP
         # values are returned and no screenshot is sent to the LLM.
@@ -658,6 +685,9 @@ async def human_act(sid:str,req:HumanAction,x_internal_key:str|None=Header(None)
     info,ctx=get(sid);ensure_human(info,req.task_id)
     async with lock_guard(ctx.lock):
         ensure_human(info,req.task_id)
+        if info.human_reason=='submit':
+            from browser.human_submit import click
+            return await click(info,ctx,req)
         if req.observation_id:
             fingerprint,*_=await signature(ctx)
             if req.observation_id!=ctx.observation_id or fingerprint!=ctx.fingerprint:
@@ -707,6 +737,7 @@ async def human_finish(sid:str,req:HumanBegin,x_internal_key:str|None=Header(Non
     async with lock_guard(ctx.lock):
         ensure_human(info,req.task_id)
         obs=await observe(ctx,screenshot=False)
+        if info.human_reason=='submit':raise HTTPException(403,'Submit task ends only through its one reviewed submit click or cancellation')
         # A citizen attestation is not proof that the challenge was solved;
         # core receives an explicit unverified flag and MUST re-inspect.
         release_human(info,ctx)
@@ -730,9 +761,11 @@ async def close(sid:str,x_internal_key:str|None=Header(None)):
     worker().require_key(x_internal_key)
     info=bridges.get(sid)
     if info:
+        if info.human_reason=='submit' and info.human_task_id and info.human_expires>time.time():raise HTTPException(409,'Submit assistance owns this session; cancel or finish the task before closing')
         ctx=contexts.get(info.context_id)
         if ctx:
             async with lock_guard(ctx.lock):
+                if info.human_reason=='submit' and info.human_task_id and info.human_expires>time.time():raise HTTPException(409,'Submit assistance owns this session; cancel or finish the task before closing')
                 release_human(info,ctx)
                 bridges.pop(sid,None);contexts.pop(info.context_id,None)
                 ctx.private_values.clear()

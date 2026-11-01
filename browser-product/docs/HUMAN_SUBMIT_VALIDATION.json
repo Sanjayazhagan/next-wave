@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-01",
+  "full_suite": {"passed": 149, "failed": 0, "warnings": 1, "seconds": 266.45},
+  "post_review_focused_suite": {"passed": 17, "failed": 0, "seconds": 34.76},
+  "post_review_scope": "Expiry-during-preflight guard and submit/API/token regressions after the full run",
+  "final_api_tests": {"passed": 5, "failed": 0},
+  "mobile_submit_ui_http_e2e": "passed; one native POST, observed practice receipt, bot polling, second click refused",
+  "existing_captcha_mobile_handoff": "passed",
+  "automated_final_submit_enabled": false,
+  "live_practice_upload": "Attachment and click accepted but confirmation empty; bounded follow-up open timed out. Not confirmed.",
+  "azure_commit_verified": false,
+  "cloud_deployment_performed": false,
+  "teammate_graph_or_bot_modified": false,
+  "runtime_env_database_or_deployment_config_modified": false
+}

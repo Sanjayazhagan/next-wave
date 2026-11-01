@@ -7,7 +7,7 @@ async function api(path,method='GET',body){
   if(!token)throw Error('Verification link missing or expired');
   const response=await fetch(`/core-assist/${encodeURIComponent(id)}/${path}`,{
     method,cache:'no-store',credentials:'omit',headers:{'X-Assist-Token':token,...(body?{'Content-Type':'application/json'}:{})},
-    body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(20000)
+    body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(taskReason==='submit'?60000:20000)
   });
   const data=await response.json();
   if(!response.ok)throw Error(data.detail||`Request failed (${response.status})`);
@@ -15,10 +15,28 @@ async function api(path,method='GET',body){
 }
 function feedback(message){$('#message').textContent=String(message)}
 function append(tag,parent,text,cls){const el=document.createElement(tag);if(cls)el.className=cls;if(text!=null)el.textContent=text;parent.appendChild(el);return el}
-let busy=false,observationId=null;
-async function control(payload){if(busy)return;busy=true;try{await api('control','POST',{...payload,observation_id:observationId});feedback('Browser updated. Check the result and continue if needed.');await refresh()}catch(err){feedback(err.message)}finally{busy=false}}
+let busy=false,observationId=null,taskReason='other';
+async function control(payload){
+  if(busy)return;busy=true;
+  const submitting=taskReason==='submit';
+  if(submitting)$('#controls').querySelectorAll('button,input').forEach(el=>el.disabled=true);
+  try{
+    const result=await api('control','POST',{...payload,observation_id:observationId});
+    if(submitting){
+      token='';expires=0;$('#done').disabled=true;$('#controls').replaceChildren();
+      $('#status').textContent=result.confirmed_by_portal?'Submission confirmed':'Submission requires review';
+      feedback(result.state==='review_changed'?'The page changed. Ask the bot for a new review.':result.confirmed_by_portal?`Portal confirmed submission${result.receipt_number?'. Receipt: '+result.receipt_number:''}`:'Submission outcome is uncertain. Do not click again; the bot must reconcile the result.');
+      if(result.page_text)append('p',$('#controls'),result.page_text);
+      return;
+    }
+    feedback('Browser updated. Check the result and continue if needed.');await refresh();
+  }catch(err){
+    feedback(submitting?err.message+' This submit link cannot be retried. Ask the bot to check the task status.':err.message);
+    if(submitting){token='';expires=0;$('#controls').replaceChildren();$('#done').disabled=true;$('#status').textContent='Check submission with the bot';}
+  }finally{busy=false}
+}
 async function refresh(){
-  const data=await api('view');observationId=data.observation_id;expires=data.expires_at||0;viewport=data.viewport||viewport;challengeBoxes=data.challenge_boxes||[];
+  const data=await api('view');observationId=data.observation_id;expires=data.expires_at||0;taskReason=data.reason||'other';$('#done').hidden=taskReason==='submit';if(taskReason==='submit'){$('#task-title').textContent='Review and submit your application';$('#task-tip').textContent='Never share this link. Only the reviewed Submit button is available. You may click it once; if the outcome is unclear, ask the bot to check it.';}viewport=data.viewport||viewport;challengeBoxes=data.challenge_boxes||[];
   if(data.screenshot_base64){$('#screen').src='data:image/jpeg;base64,'+data.screenshot_base64;$('#screen').hidden=false}
   else{$('#screen').hidden=true;feedback('Preview is temporarily unavailable. Refresh before clicking a visual challenge.')}
   $('#url').textContent=data.url;
@@ -38,7 +56,7 @@ async function refresh(){
       btn.onclick=()=>control({kind:'click',target_ref:item.ref});
     }
   }
-  $('#status').textContent='Human assistance active';
+  $('#status').textContent=taskReason==='submit'?'Review the page, then click Submit once.':'Human assistance active';
 }
 $('#screen').onclick=async event=>{
   const b=event.currentTarget.getBoundingClientRect(),x=(event.clientX-b.left)/b.width*viewport.width,y=(event.clientY-b.top)/b.height*viewport.height;

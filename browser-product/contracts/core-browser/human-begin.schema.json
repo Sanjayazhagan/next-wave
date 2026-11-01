@@ -1,0 +1,74 @@
+{
+  "properties": {
+    "reason": {
+      "default": "other",
+      "pattern": "^(otp|captcha|login|upload|verification|submit|other)$",
+      "title": "Reason",
+      "type": "string"
+    },
+    "task_id": {
+      "maxLength": 100,
+      "minLength": 8,
+      "title": "Task Id",
+      "type": "string"
+    },
+    "expires_at": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expires At"
+    },
+    "review_observation_id": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "minLength": 8,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Review Observation Id"
+    },
+    "approval_ref": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "minLength": 8,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Approval Ref"
+    },
+    "target_ref": {
+      "anyOf": [
+        {
+          "maxLength": 100,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target Ref"
+    }
+  },
+  "required": [
+    "task_id"
+  ],
+  "title": "HumanBegin",
+  "type": "object"
+}

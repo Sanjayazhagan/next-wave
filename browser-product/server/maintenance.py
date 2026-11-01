@@ -19,8 +19,9 @@ async def sweep(app, at=None):
     from server.core_assist import database
     database()
     with app.conn() as db:
-        db.execute("UPDATE core_assist_tasks SET state='expired' WHERE expires<? AND state IN ('offering','active','completing','needs_reconciliation')",(at.timestamp(),))
+        db.execute("UPDATE core_assist_tasks SET state='expired' WHERE expires<? AND state IN ('offering','active','completing','needs_reconciliation') AND (reason!='submit' OR state IN ('offering','active'))",(at.timestamp(),))
         db.execute('DELETE FROM core_assist_tasks WHERE expires<?',(at.timestamp()-30*86400,))
+        db.execute('DELETE FROM core_assist_results WHERE task_id NOT IN (SELECT id FROM core_assist_tasks)')
         db.execute('DELETE FROM audit WHERE at<? AND session_id NOT IN (SELECT id FROM sessions UNION SELECT id FROM browser_contexts)',(cutoff,))
     deleted = 0
     with app.conn() as db:

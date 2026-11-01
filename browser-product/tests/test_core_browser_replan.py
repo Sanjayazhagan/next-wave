@@ -35,3 +35,26 @@ async def test_numeric_otp_challenge_pauses_before_planner():
     async with CoreBrowserClient('http://local','test',transport=httpx.MockTransport(handler)) as client:
         result=await client.step('sid',decide)
     assert result['paused'] and result['challenge']['kind']=='otp'
+
+
+@pytest.mark.asyncio
+async def test_iframe_captcha_blocked_page_still_requests_secure_human_handoff():
+    challenge = {'kind':'captcha','delivery_mode':'human_assistance_link',
+                 'image_base64':None,'input':None,'submit':None,
+                 'human_task_reason':'captcha','requires_human':True}
+    def handler(req):return httpx.Response(200,json={'page_status':'blocked','challenge':challenge})
+    async def decide(s):raise AssertionError('A blocked CAPTCHA page must not be handed to the planner')
+    async with CoreBrowserClient('http://local','test',transport=httpx.MockTransport(handler)) as client:
+        result=await client.step('sid',decide)
+    assert result['paused'] and result['reason']=='human_verification'
+    assert result['challenge']['delivery_mode']=='human_assistance_link'
+
+
+@pytest.mark.asyncio
+async def test_incomplete_inspection_remains_paused_without_handoff():
+    def handler(req):return httpx.Response(200,json={'page_status':'inspection_incomplete',
+        'challenge':{'kind':'captcha','delivery_mode':'human_assistance_link'}})
+    async def decide(s):raise AssertionError('Incomplete inspection must not be planned')
+    async with CoreBrowserClient('http://local','test',transport=httpx.MockTransport(handler)) as client:
+        result=await client.step('sid',decide)
+    assert result['reason']=='inspection_incomplete'

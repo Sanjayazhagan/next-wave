@@ -17,7 +17,7 @@ class ContextStart(StrictModel):
 class BrowserAction(StrictModel):
     action_id:str=Field(min_length=8,max_length=100)
     observation_id:str=Field(max_length=100)
-    kind:Literal['click','fill','select','check','upload','navigate','back','scroll','wait','switch_tab','extract']
+    kind:Literal['click','fill','select','check','upload','navigate','back','scroll','wait','switch_tab','extract','blur']
     target_ref:str|None=Field(default=None,max_length=100)
     value:str=Field(default='',max_length=2000)
     values:list[str]=Field(default_factory=list,max_length=20)
@@ -62,6 +62,7 @@ def model_input(goal:str,observation:dict)->dict:
         'Pause for authentication, OTP, CAPTCHA, device authentication and final review. Never bypass these controls.',
         'You cannot authorize final submission; use the portal adapter and exact citizen approval flow.',
         'For comboboxes/autocomplete, fill then observe and choose the requested observed option; typed text alone may not select a value.',
+        'Blur an observed ordinary input to release autocomplete focus; inspect occluded/requires_scroll hints and refresh before choosing a link.',
         'Inspect interaction_state overlays and their scoped controls. Do not click obscured background elements or infer consent.',
         'On session expiry reopen explicitly and request reauthentication. Reconcile uncertain writes; never repeat submission with a fresh action ID.',
         'After every action inspect the returned observation. On stale targets request a new observation instead of guessing.'

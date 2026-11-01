@@ -16,7 +16,10 @@ class CoreBrowserClient:
         if not url or not consent_ref:raise ValueError('Explicit URL and citizen consent required')
         return await self.request('POST','session',{'url':url,'consent_ref':consent_ref})
     async def snapshot(self,sid):return await self.request('GET',f'session/{sid}/snapshot')
-    async def human_task(self,sid,reason):return await self.request('POST',f'session/{sid}/human-task',{'reason':reason})
+    async def human_task(self,sid,reason,*,review_observation_id=None,approval_ref=None,target_ref=None,ttl_seconds=None):
+        options={'review_observation_id':review_observation_id,'approval_ref':approval_ref,'target_ref':target_ref,'ttl_seconds':ttl_seconds}
+        return await self.request('POST',f'session/{sid}/human-task',{'reason':reason,**{k:v for k,v in options.items() if v is not None}})
+    async def human_task_status(self,sid):return await self.request('GET',f'session/{sid}/human-task')
     async def close(self,sid):return await self.request('DELETE',f'session/{sid}')
     async def retry_pending(self,sid):
         if sid not in self.pending_actions:raise ValueError('No pending action')
@@ -33,12 +36,16 @@ class CoreBrowserClient:
         if not 0<=max_replans<=3:raise ValueError('max_replans must be between 0 and 3')
         for attempt in range(max_replans+1):
             snapshot=await self.snapshot(sid)
+            if snapshot.get('consent_required'):return {'paused':True,'reason':'citizen_consent_choice_required','human_signals':snapshot.get('human_signals',[])}
             if snapshot.get('session_expired'):return {'paused':True,'reason':'session_expired','requires_reauthentication':True}
             if snapshot.get('needs_reconciliation'):return {'paused':True,'reason':'action_outcome_unknown'}
+            # CAPTCHA walls can be classified as `blocked` while still
+            # containing a trustworthy challenge signal. Offer a human link
+            # before handling that status as a generic navigation failure.
+            if snapshot.get('challenge') and snapshot.get('page_status','ready') in ('ready','blocked'):
+                return {'paused':True,'reason':'human_verification','challenge':snapshot['challenge']}
             if snapshot.get('page_status','ready')!='ready':
                 return {'paused':True,'reason':snapshot['page_status'],'human_signals':snapshot.get('human_signals',[])}
-            if snapshot.get('challenge'):
-                return {'paused':True,'reason':'human_verification','challenge':snapshot['challenge']}
             action=await decide(snapshot)
             if action is None:return {'paused':True,'reason':'core_requested_pause'}
             action={**action,'action_id':action.get('action_id') or str(uuid.uuid4())}

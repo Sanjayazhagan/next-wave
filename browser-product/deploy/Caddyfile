@@ -25,7 +25,9 @@
     # Short-lived, scoped, human-only verification link. Bearer token must be
     # supplied in X-Assist-Token from fragment-backed JS (never URL query).
     # No service key or public browser-control endpoint is exposed here.
-    @human path /core-assist/* /core-assist.js /core-assist.css
+    # The bare /core-assist/ landing page is safe and contains no session.
+    # Real handoffs use /core-assist/<task-id>#<fragment-token>.
+    @human path /core-assist/ /core-assist/* /core-assist.js /core-assist.css
     handle @human {
         reverse_proxy api:8000
     }

@@ -1,0 +1,12 @@
+{
+  "date": "2026-11-01",
+  "full_pytest": {"passed": 133, "failed": 0, "warnings": 1, "seconds": 240.42},
+  "final_targeted_pytest": {"passed": 6, "failed": 0, "seconds": 17.81},
+  "final_targeted_scope": "Stable-target/navigation tests rerun after narrowing consent-frame visibility detection",
+  "flipkart": "Verified Help Center navigation after observed optional login prompt closure",
+  "nodejs": "Verified /learn navigation and URL-change effect",
+  "cnn": "Verified /world navigation and URL-change effect",
+  "guardian": "Consent iframe explicitly detected; human choice required, no automatic consent decision or verified Science navigation",
+  "actual_model_or_chat_verified": false,
+  "cloud_deployment_performed": false
+}

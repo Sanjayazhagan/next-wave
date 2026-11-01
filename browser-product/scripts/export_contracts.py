@@ -25,6 +25,8 @@ for name,model in [('conversation-interrupt',Interrupt),('citizen-reply',Citizen
 print('Exported core conversation transport contracts')
 
 from browser.core_compat import CoreAction,Open,HumanAction
+from browser.core_compat import HumanBegin
+from server.core_assist import Offer
 core_out=root/'contracts'/'core-browser';core_out.mkdir(exist_ok=True)
-for name,model in [('action',CoreAction),('open',Open),('human-action',HumanAction)]:
+for name,model in [('action',CoreAction),('open',Open),('human-action',HumanAction),('human-task',Offer),('human-begin',HumanBegin)]:
     (core_out/(name+'.schema.json')).write_text(json.dumps(model.model_json_schema(),indent=2)+'\n',encoding='utf-8')
