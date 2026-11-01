@@ -71,6 +71,7 @@ TAMIL = {
     m.CAPTCHA_LINK: "போர்டலில் பாதுகாப்பு சரிபார்ப்பு தேவை. இந்த தனிப்பட்ட இணைப்பைத் திறந்து, நீங்களே முடித்து, பிறகு Done அழுத்தவும்.",
     m.SUBMIT_LINK: "இந்த தனிப்பட்ட இணைப்பைத் திறந்து, உங்கள் படிவத்தைச் சரிபார்த்து, நீங்களே Submit அழுத்தவும். இது ஒரு முறை மட்டும், 10 நிமிடங்களுக்கு வேலை செய்யும். பிறகு Done அழுத்தவும்.",
     m.SUBMIT_LINK_ENDED: "அந்த இணைப்பை இனி பயன்படுத்த முடியாது, சமர்ப்பிப்பு உறுதி செய்யப்படவில்லை.",
+    m.SUBMIT_NO_RECEIPT: "நீங்கள் Submit அழுத்தினீர்கள், படிவம் அனுப்பப்பட்டது, ஆனால் போர்டல் ரசீது எண் தரவில்லை. போர்டலைச் சரிபார்க்கவும். நான் மீண்டும் Submit அழுத்த மாட்டேன்.",
     m.SUBMITTED: "உங்கள் விண்ணப்பம் சமர்ப்பிக்கப்பட்டது. உங்கள் ரசீது எண் {number}.",
     _QUESTIONS["state"]: "நீங்கள் எந்த மாநிலத்தில் வசிக்கிறீர்கள்?",
     _QUESTIONS["course"]: "இப்போது என்ன படிக்கிறீர்கள்? எடுத்துக்காட்டு: 12ஆம் வகுப்பு, அல்லது B.E. இரண்டாம் ஆண்டு.",
@@ -147,6 +148,7 @@ HINDI = {
     m.CAPTCHA_LINK: "पोर्टल को सुरक्षा जाँच चाहिए। यह निजी लिंक खोलें, इसे खुद पूरा करें, फिर Done दबाएँ।",
     m.SUBMIT_LINK: "यह निजी लिंक खोलें, अपना फ़ॉर्म जाँचें और Submit खुद दबाएँ। यह एक बार, 10 मिनट तक चलेगा। फिर Done दबाएँ।",
     m.SUBMIT_LINK_ENDED: "वह लिंक अब इस्तेमाल नहीं हो सकता, और जमा होने की पुष्टि नहीं हुई।",
+    m.SUBMIT_NO_RECEIPT: "आपने Submit दबाया और फ़ॉर्म भेजा गया, लेकिन पोर्टल ने रसीद नंबर नहीं दिया। कृपया पोर्टल जाँचें। मैं दोबारा Submit नहीं दबाऊँगा।",
     m.SUBMITTED: "आपका आवेदन जमा हो गया है। आपकी रसीद संख्या {number} है।",
     _QUESTIONS["state"]: "आप किस राज्य में रहते हैं?",
     _QUESTIONS["course"]: "आप अभी क्या पढ़ रहे हैं? उदाहरण: कक्षा 12, या B.E. दूसरा वर्ष।",
@@ -196,9 +198,31 @@ def _rule_engine_tables() -> dict[str, dict[str, str]]:
     return {"ta": RULES_TAMIL, "hi": RULES_HINDI}
 
 
+# Review warning labels; only these two languages have them written so far.
+_LABELS = {
+    "ta": {
+        "- Name:": "- பெயர்:",
+        "- Date of birth:": "- பிறந்த தேதி:",
+        "- Father's name:": "- தந்தையின் பெயர்:",
+        "- Family income:": "- குடும்ப வருமானம்:",
+        "- Community:": "- சமூகம்:",
+        "- Certificate check:": "- சான்றிதழ் சரிபார்ப்பு:",
+        "- Expiry date:": "- காலாவதி தேதி:",
+    },
+    "hi": {
+        "- Name:": "- नाम:",
+        "- Date of birth:": "- जन्म तिथि:",
+        "- Father's name:": "- पिता का नाम:",
+        "- Family income:": "- पारिवारिक आय:",
+        "- Community:": "- समुदाय:",
+        "- Certificate check:": "- प्रमाणपत्र जाँच:",
+        "- Expiry date:": "- समाप्ति तिथि:",
+    },
+}
+
 # Kept apart from BUILT_IN, which holds the same messages in every language.
 _LOOKUP = {
-    language: {**_rule_engine_tables().get(language, {}), **table}  # Core's own entries win.
+    language: {**_rule_engine_tables().get(language, {}), **_LABELS.get(language, {}), **table}  # Core's own entries win.
     for language, table in BUILT_IN.items()
 }
 _PLACEHOLDER = re.compile(r"\{\w+\}")

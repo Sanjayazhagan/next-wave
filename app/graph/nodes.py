@@ -104,6 +104,11 @@ def typed(reply: dict[str, Any]) -> str:
     return str(reply.get("text", "")).strip()
 
 
+def field_label(field: str) -> str:
+    """The doctor reports code names; the user sees plain words."""
+    return messages.FIELD_LABELS.get(field, field.replace("_", " ").capitalize())
+
+
 def page_values(snapshot: Snapshot) -> list[str]:
     """What the form itself holds, for pages where no field was tracked by name."""
     filled = [
@@ -714,7 +719,7 @@ class Nodes:
         except BrowserError:
             status = {}
         task_state = status.get("state")
-        if task_state in LINK_OPEN_STATES:
+        if task_state in LINK_OPEN_STATES or (is_submit and task_state == "submitting"):
             return {"route": "human_wait"}
         if not is_submit:
             return {"route": "again", "link": None}
@@ -726,6 +731,13 @@ class Nodes:
                 "outcome": "stopped_at_review",
                 "link": None,
                 "final": {"text": messages.SUBMIT_LINK_ENDED},
+            }
+        if status.get("click_attempted"):
+            return {
+                "route": "stop",
+                "outcome": "submitted_unconfirmed",
+                "link": None,
+                "final": {"text": messages.SUBMIT_NO_RECEIPT},
             }
         # Possibly submitted: never offer a second click.
         return {**self._handover(messages.SUBMIT_UNCERTAIN), "link": None}
@@ -786,7 +798,7 @@ class Nodes:
         report = state.get("doctor_report")
         if report and report["mismatches"]:
             lines.append(f"\n{messages.REVIEW_FLAGS}")
-            lines += [f"- {m['field']}: {m['detail']}" for m in report["mismatches"]]
+            lines += [f"- {field_label(m['field'])}: {m['detail']}" for m in report["mismatches"]]
         text = f"{messages.REVIEW_INTRO}\n\n" + "\n".join(lines)
         return {"review": {"text": text, "image_ref": image_ref}, "filled": filled}
 

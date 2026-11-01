@@ -70,6 +70,20 @@ SUBMIT_LINK = (
     "Open this private link, check your form and press Submit yourself. It works once, "
     "for 10 minutes. Then press Done."
 )
+SUBMIT_NO_RECEIPT = (
+    "You pressed Submit and the form was sent, but the portal gave no receipt number. "
+    "Please check the portal. I won't press Submit again."
+)
+FIELD_LABELS = {
+    "full_name": "Name",
+    "date_of_birth": "Date of birth",
+    "dob": "Date of birth",
+    "father_name": "Father's name",
+    "annual_income": "Family income",
+    "community": "Community",
+    "authenticity": "Certificate check",
+    "valid_until": "Expiry date",
+}
 SUBMIT_LINK_ENDED = "That link can no longer be used, and no submission was confirmed."
 CAPTCHA = "The portal is showing this security image. Please reply with the text in it."
 OTP = "The portal sent an OTP to your phone. Please reply with it."
