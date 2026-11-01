@@ -42,10 +42,10 @@ POST https://gradientzero-browser26.eastasia.cloudapp.azure.com/core-browser/ses
 X-Internal-Key: ...
 Content-Type: application/json
 
-{"url":"https://www.selenium.dev/selenium/web/web-form.html","consent_ref":"authorized-test-2026"}
+{"portal_id":"scholarship_practice"}
 ```
 
-Record `session_id`. Snapshot and fill synthetic values, then create a human task only when an OTP/CAPTCHA/upload handoff is needed. Open its `assistance_url` on another trusted device. Confirm final Submit stays blocked without a reviewed adapter and explicit approval. Close the session afterward.
+First merge the mock scholarship URL and receipt pattern from `deploy/practice-scholarship.example.json` into your existing `BROWSER_PORTALS_JSON` (see `docs/SCHOLARSHIP_PRACTICE_DEMO.md`). This replaces Selenium in the demo preview; if the bot uses an existing ID such as `test`, update that ID's entry instead. Record `session_id`, fill only synthetic values, collect the citizen's approval and create a submit-only human task. Open its `assistance_url` on another trusted device, click Submit once and confirm the `DEMO-SCH-...` receipt through task-status polling. Automated final submission remains disabled. Close the session after the task ends.
 
 ## 4. Rollback
 

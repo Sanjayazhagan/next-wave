@@ -15,28 +15,47 @@ async function api(path,method='GET',body){
 }
 function feedback(message){$('#message').textContent=String(message)}
 function append(tag,parent,text,cls){const el=document.createElement(tag);if(cls)el.className=cls;if(text!=null)el.textContent=text;parent.appendChild(el);return el}
-let busy=false,observationId=null,taskReason='other';
+let busy=false,observationId=null,taskReason='other',capabilityEnded=false,viewGeneration=0;
+function endCapability(){
+  capabilityEnded=true;viewGeneration++;token='';expires=0;
+  $('#expiry').textContent='';$('#expiry').hidden=true;
+  $('#done').disabled=true;$('#refresh').disabled=true;
+}
+function closeSubmitPanels(){
+  $('#screen-wrap').closest('section').hidden=true;
+  $('#controls').closest('section').hidden=true;
+}
+function submissionOutcome(result){
+  if(result.confirmed_by_portal)return {status:'Submission confirmed',message:result.receipt_number?`Portal confirmed submission. Receipt: ${result.receipt_number}`:'Portal confirmed submission. No receipt number was provided.'};
+  if(result.state==='review_changed')return {status:'New review required',message:'The reviewed page changed. Ask the bot for a new review before submitting.'};
+  if(['rejected','expired','cancelled'].includes(result.state))return {status:'Submission not completed',message:'This submit task ended without portal confirmation. Ask the bot to check the task before proceeding.'};
+  return {status:'Submission outcome uncertain',message:'The portal has not confirmed this submission. Do not click again; ask the bot to check the outcome.'};
+}
 async function control(payload){
   if(busy)return;busy=true;
   const submitting=taskReason==='submit';
-  if(submitting)$('#controls').querySelectorAll('button,input').forEach(el=>el.disabled=true);
+  if(submitting){viewGeneration++;$('#refresh').disabled=true;$('#controls').querySelectorAll('button,input').forEach(el=>el.disabled=true);}
   try{
     const result=await api('control','POST',{...payload,observation_id:observationId});
     if(submitting){
-      token='';expires=0;$('#done').disabled=true;$('#controls').replaceChildren();
-      $('#status').textContent=result.confirmed_by_portal?'Submission confirmed':'Submission requires review';
-      feedback(result.state==='review_changed'?'The page changed. Ask the bot for a new review.':result.confirmed_by_portal?`Portal confirmed submission${result.receipt_number?'. Receipt: '+result.receipt_number:''}`:'Submission outcome is uncertain. Do not click again; the bot must reconcile the result.');
+      endCapability();closeSubmitPanels();$('#controls').replaceChildren();
+      const outcome=submissionOutcome(result);$('#status').textContent=outcome.status;feedback(outcome.message);
       if(result.page_text)append('p',$('#controls'),result.page_text);
       return;
     }
     feedback('Browser updated. Check the result and continue if needed.');await refresh();
   }catch(err){
     feedback(submitting?err.message+' This submit link cannot be retried. Ask the bot to check the task status.':err.message);
-    if(submitting){token='';expires=0;$('#controls').replaceChildren();$('#done').disabled=true;$('#status').textContent='Check submission with the bot';}
+    if(submitting){endCapability();closeSubmitPanels();$('#controls').replaceChildren();$('#status').textContent='Check submission with the bot';}
   }finally{busy=false}
 }
 async function refresh(){
-  const data=await api('view');observationId=data.observation_id;expires=data.expires_at||0;taskReason=data.reason||'other';$('#done').hidden=taskReason==='submit';if(taskReason==='submit'){$('#task-title').textContent='Review and submit your application';$('#task-tip').textContent='Never share this link. Only the reviewed Submit button is available. You may click it once; if the outcome is unclear, ask the bot to check it.';}viewport=data.viewport||viewport;challengeBoxes=data.challenge_boxes||[];
+  if(capabilityEnded||(busy&&taskReason==='submit'))return;
+  const generation=++viewGeneration;
+  let data;
+  try{data=await api('view')}catch(err){if(capabilityEnded||generation!==viewGeneration)return;throw err}
+  if(capabilityEnded||generation!==viewGeneration)return;
+  $('#expiry').hidden=false;observationId=data.observation_id;expires=data.expires_at||0;taskReason=data.reason||'other';$('#done').hidden=taskReason==='submit';if(taskReason==='submit'){$('#task-title').textContent='Review and submit your application';$('#task-tip').textContent='Never share this link. Only the reviewed Submit button is available. You may click it once; if the outcome is unclear, ask the bot to check it.';}viewport=data.viewport||viewport;challengeBoxes=data.challenge_boxes||[];
   if(data.screenshot_base64){$('#screen').src='data:image/jpeg;base64,'+data.screenshot_base64;$('#screen').hidden=false}
   else{$('#screen').hidden=true;feedback('Preview is temporarily unavailable. Refresh before clicking a visual challenge.')}
   $('#url').textContent=data.url;
@@ -68,8 +87,8 @@ $('#screen').onclick=async event=>{
 $('#refresh').onclick=()=>refresh().catch(e=>feedback(e.message));
 $('#done').onclick=async()=>{try{
   const res=await api('complete','POST',{});
-  $('#status').textContent='Handed back to agent';$('#done').disabled=true;token='';
+  $('#status').textContent='Handed back to agent';endCapability();
   feedback(res.still_waiting_human?'Control returned. The site still displays a verification signal; the agent must inspect before proceeding.':'Control returned. The agent must verify the result before continuing.');
 }catch(err){feedback(err.message)}};
-setInterval(()=>{if(!expires)return;const remaining=Math.max(0,Math.ceil(expires-Date.now()/1000));$('#expiry').textContent=`Link expires in ${remaining} seconds`;if(!remaining){token='';$('#done').disabled=true;feedback('Link expired. Request a new invitation from the agent.')}},1000);
+setInterval(()=>{if(!expires)return;const remaining=Math.max(0,Math.ceil(expires-Date.now()/1000));$('#expiry').textContent=`Link expires in ${remaining} seconds`;if(!remaining){endCapability();$('#controls').querySelectorAll('button,input').forEach(el=>el.disabled=true);feedback(busy?'Link expired while processing. Ask the bot to check the outcome; do not retry.':'Link expired. Request a new invitation from the agent.')}},1000);
 refresh().catch(e=>{feedback(e.message);$('#status').textContent='Unable to open verification'});

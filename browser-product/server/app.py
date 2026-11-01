@@ -103,6 +103,8 @@ from server.core_gateway import router as core_gateway_router
 app.include_router(core_gateway_router)
 from server.core_assist import router as core_assist_router
 app.include_router(core_assist_router)
+from server.practice_scholarship import router as practice_scholarship_router
+app.include_router(practice_scholarship_router)
 from server.browser_lab import router as browser_lab_router
 app.include_router(browser_lab_router)
 from server.conversation_bridge import router as conversation_router
