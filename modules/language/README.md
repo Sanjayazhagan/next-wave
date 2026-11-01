@@ -56,6 +56,24 @@ docker run --env-file .env -p 8081:8081 gz-language
 
 `compose_snippet.yml` has the service block for the main compose file.
 
+### Deploy on Railway (next to the core API)
+
+1. In the Railway project: **New service → GitHub repo** (this repo), name it `language`.
+2. Service **Settings → Config-as-code**: `modules/language/railway.toml` (builds
+   `modules/language/Dockerfile` from the repo root, health check `/health`).
+3. Service **Variables**: `SARVAM_API_KEY` (and the `BHASHINI_*` three if used),
+   `LANG_PRIMARY=sarvam` while Bhashini isn't configured. Railway sets `PORT`.
+4. **Settings → Networking**: generate a domain, or use the private address
+   `http://language.railway.internal:<PORT>`.
+5. On the **core API** service, set `LANGUAGE_SERVICE_URL` to that address and redeploy.
+6. Check: `curl https://<domain>/health` shows `"sarvam": {"configured": true, ...}`, and the
+   core's `uv run python -m scripts.check_integration` shows the language service READY.
+
+This service never calls Groq, so it doesn't need the core's shared LLM pacing.
+
+Tested 1 Nov 2026: the image builds and runs locally; `/health` answers and a same-language
+request works. A real translation answers 503 until a valid Sarvam key is set.
+
 ## Environment
 
 | Variable | Purpose |

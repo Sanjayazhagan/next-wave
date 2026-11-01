@@ -1,0 +1,11 @@
+# Railway config for the language service. In the Railway service's Settings, set
+# "Config-as-code" (Railway config file) to modules/language/railway.toml; the build
+# context stays the repo root.
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "modules/language/Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
